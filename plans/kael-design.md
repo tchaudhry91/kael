@@ -1,6 +1,6 @@
 # Kael
 
-Kael is a scriptable infrastructure analysis engine. It lets you write Lua scripts that orchestrate actions — data fetching, analysis, transformations — with implementations that live anywhere (git repos, local paths).
+Kael is a scriptable infrastructure analysis engine. It lets you write Lua scripts that orchestrate kit functions — data fetching, analysis, transformations — with implementations that live anywhere (git repos, local paths).
 
 ## Overview
 
@@ -8,12 +8,12 @@ Kael is a scriptable infrastructure analysis engine. It lets you write Lua scrip
 ┌─────────────────────────────────────────────────────────────┐
 │  User Script (Lua)                                          │
 │                                                             │
-│  local data = actions.prometheus.query({                    │
+│  local data = kit.prometheus.query({                        │
 │      query = "up",                                          │
 │      range = "7d",                                          │
 │  })                                                         │
 │                                                             │
-│  local result = actions.analysis.quiet_periods({            │
+│  local result = kit.analysis.quiet_periods({                │
 │      data = data,                                           │
 │      threshold = 0.2,                                       │
 │  })                                                         │
@@ -24,9 +24,9 @@ Kael is a scriptable infrastructure analysis engine. It lets you write Lua scrip
 │  Kael Engine (Go)                                           │
 │                                                             │
 │  - Embeds Lua VM                                            │
-│  - Provides define_action() global                          │
-│  - Loads actions repo                                       │
-│  - Executes actions via envyr                               │
+│  - Provides define_tool() global                            │
+│  - Loads kit                                                │
+│  - Executes tools via envyr                                 │
 │  - Handles JSON conversion                                  │
 └─────────────────────┬───────────────────────────────────────┘
                       │
@@ -34,7 +34,7 @@ Kael is a scriptable infrastructure analysis engine. It lets you write Lua scrip
 ┌─────────────────────────────────────────────────────────────┐
 │  Envyr                                                      │
 │                                                             │
-│  - Runs action implementations                              │
+│  - Runs tool implementations                                │
 │  - Docker executor (sandboxed) or native executor           │
 │  - Handles git cloning, dependency installation             │
 │  - JSON stdin/stdout contract                               │
@@ -43,32 +43,32 @@ Kael is a scriptable infrastructure analysis engine. It lets you write Lua scrip
 
 ## Core Concepts
 
-### Actions
+### Tools
 
-An action is a unit of work — fetch data from Prometheus, analyze timeseries, query an API. Actions are implemented as Python scripts (or any language) that:
+A tool is a unit of work — fetch data from Prometheus, analyze timeseries, query an API. Tools are implemented as Python scripts (or any language) that:
 
 - Read JSON from stdin
 - Do work
 - Write JSON to stdout
 
-Action implementations live anywhere — public git repos, private repos, local paths. They're generic and reusable.
+Tool implementations live anywhere — public git repos, private repos, local paths. They're generic and reusable.
 
-### Actions Repo (Lua Metadata)
+### Kit (Lua Metadata)
 
-A Lua repo that defines which actions are available and how to call them. This is what you share with your team. It:
+A Lua repo that defines which tools are available and how to call them. This is what you share with your team. It:
 
-- References action implementations by git URL or path
+- References tool implementations by git URL or path
 - Defines company-specific defaults
 - Provides the interface your scripts use
 
 ### Scripts
 
-Lua scripts that use actions to do useful work. Orchestration, looping, conditionals, combining results — that's what Lua handles.
+Lua scripts that use the kit to do useful work. Orchestration, looping, conditionals, combining results — that's what Lua handles.
 
-## Actions Repo Structure
+## Kit Structure
 
 ```
-my-actions/
+my-kit/
 ├── init.lua
 ├── prometheus/
 │   ├── init.lua
@@ -107,10 +107,10 @@ M.query = require("prometheus.query")
 return M
 ```
 
-### Action Definition (e.g., prometheus/query.lua)
+### Tool Definition (e.g., prometheus/query.lua)
 
 ```lua
-return define_action({
+return define_tool({
     source = "git@github.com:someone/prometheus-tools.git",
     entrypoint = "query.py",
     executor = "docker",
@@ -121,10 +121,10 @@ return define_action({
 })
 ```
 
-## define_action Config
+## define_tool Config
 
 ```lua
-define_action({
+define_tool({
     -- Required: where the implementation lives
     source = "git@github.com:someone/repo.git",
     
@@ -154,7 +154,7 @@ define_action({
 
 ```lua
 -- Fetch data
-local data = actions.prometheus.query({
+local data = kit.prometheus.query({
     query = 'sum(rate(http_requests_total[5m])) by (tenant)',
     range = "90d",
 })
@@ -167,8 +167,8 @@ for i, row in ipairs(data) do
     end
 end
 
--- Pass to another action
-local result = actions.analysis.quiet_periods({
+-- Pass to another tool
+local result = kit.analysis.quiet_periods({
     data = filtered,
     threshold = 0.2,
 })
@@ -182,26 +182,26 @@ end
 ### Looping Over Tenants
 
 ```lua
-local tenants = actions.internal.list_tenants({})
+local tenants = kit.internal.list_tenants({})
 
 for i, tenant in ipairs(tenants) do
-    local cost = actions.aws.cost_explorer({
+    local cost = kit.aws.cost_explorer({
         tenant = tenant.name,
         days = 30,
     })
-    
-    local quiet = actions.analysis.quiet_periods({
+
+    local quiet = kit.analysis.quiet_periods({
         data = cost.data,
         threshold = 0.2,
     })
-    
+
     print(tenant.name, cost.total, #quiet.windows)
 end
 ```
 
 ### Error Handling
 
-Actions raise Lua errors on failure. Simple scripts crash with a message:
+Tools raise Lua errors on failure. Simple scripts crash with a message:
 
 ```
 $ kael run script.lua
@@ -211,7 +211,7 @@ Error: prometheus.query failed: connection refused
 Scripts that need to handle errors use pcall:
 
 ```lua
-local ok, data = pcall(actions.prometheus.query, {
+local ok, data = pcall(kit.prometheus.query, {
     query = "up",
     range = "7d",
 })
@@ -222,10 +222,10 @@ if not ok then
 end
 ```
 
-Actions may return error objects instead of crashing:
+Tools may return error objects instead of crashing:
 
 ```lua
-local result = actions.internal.tenant_lookup({ id = "xyz" })
+local result = kit.internal.tenant_lookup({ id = "xyz" })
 
 if result.error then
     print("Not found:", result.error)
@@ -239,13 +239,13 @@ end
 ### Startup
 
 1. Create Lua VM
-2. Register `define_action` as global
-3. Load actions repo: `actions = require("init")`
+2. Register `define_tool` as global
+3. Load kit: `kit = require("init")`
 4. Run user script
 
-### Action Execution
+### Tool Execution
 
-When an action is called:
+When a tool is called:
 
 1. Merge defaults with user params (user wins)
 2. Build envyr command from metadata
@@ -267,9 +267,9 @@ envyr run \
 
 Stdin receives the merged params as JSON. Stdout is captured and parsed as JSON.
 
-## Action Implementation Contract
+## Tool Implementation Contract
 
-Actions are scripts that:
+Tools are scripts that:
 
 1. Read JSON from stdin
 2. Do work
@@ -294,23 +294,23 @@ if __name__ == "__main__":
     main()
 ```
 
-Actions don't know about Kael. They're generic scripts that follow the JSON stdin/stdout contract.
+Tools don't know about Kael. They're generic scripts that follow the JSON stdin/stdout contract.
 
 ## CLI
 
 ```bash
 # Run a script
-kael --actions ./my-actions run script.lua
+kael --kit ./my-kit run script.lua
 
 # REPL (future)
-kael --actions ./my-actions repl
+kael --kit ./my-kit repl
 ```
 
 ## Future Considerations
 
 ### LSP Support
 
-Action definitions can include EmmyLua annotations for editor autocomplete:
+Tool definitions can include EmmyLua annotations for editor autocomplete:
 
 ```lua
 ---@class PrometheusQueryParams
@@ -320,12 +320,12 @@ Action definitions can include EmmyLua annotations for editor autocomplete:
 
 ---@param params PrometheusQueryParams
 ---@return { timestamp: string, value: number }[]
-return define_action({...})
+return define_tool({...})
 ```
 
 ### Large Data
 
-For large datasets, actions can write to temp files and return file paths:
+For large datasets, tools can write to temp files and return file paths:
 
 ```json
 {"_file": "/tmp/kael-data-xyz.json"}
@@ -337,7 +337,7 @@ Engine reads the file, converts to Lua table, cleans up.
 
 ```yaml
 # ~/.config/kael/config.yaml
-actions_path: ~/my-actions
+kit_path: ~/my-kit
 ```
 
-Avoids `--actions` flag on every invocation.
+Avoids `--kit` flag on every invocation.

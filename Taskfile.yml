@@ -1,0 +1,40 @@
+# Taskfile for kael
+
+version: '3'
+
+vars:
+  BINARY_NAME: kael
+  BUILD_DIR: bin
+  VERSION: 0.1.0
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmd: task --list
+
+  build:
+    desc: Build kael binary
+    cmd: mkdir -p {{.BUILD_DIR}} && go build -ldflags="-X main.version={{.VERSION}}" -o {{.BUILD_DIR}}/{{.BINARY_NAME}} ./cmd
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.BUILD_DIR}}/{{.BINARY_NAME}}"
+
+  test:
+    desc: Run test suite
+    cmd: go test ./...
+
+  run:
+    desc: Build and run kael
+    deps: [build]
+    cmd: ./{{.BUILD_DIR}}/{{.BINARY_NAME}} {{.CLI_ARGS}}
+
+  clean:
+    desc: Clean build artifacts
+    cmd: rm -rf {{.BUILD_DIR}}
+
+  lint:
+    desc: Run go vet
+    cmd: go vet ./...
