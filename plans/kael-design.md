@@ -24,7 +24,7 @@ Kael is a scriptable infrastructure analysis engine. It lets you write Lua scrip
 │  Kael Engine (Go)                                           │
 │                                                             │
 │  - Embeds Lua VM                                            │
-│  - Provides define_tool() global                            │
+│  - Provides tools.define_tool() function                    │
 │  - Loads kit                                                │
 │  - Executes tools via envyr                                 │
 │  - Handles JSON conversion                                  │
@@ -110,7 +110,7 @@ return M
 ### Tool Definition (e.g., prometheus/query.lua)
 
 ```lua
-return define_tool({
+return tools.define_tool({
     source = "git@github.com:someone/prometheus-tools.git",
     entrypoint = "query.py",
     executor = "docker",
@@ -124,7 +124,7 @@ return define_tool({
 ## define_tool Config
 
 ```lua
-define_tool({
+tools.define_tool({
     -- Required: where the implementation lives
     source = "git@github.com:someone/repo.git",
     
@@ -134,7 +134,7 @@ define_tool({
     -- Optional: subdirectory within repo
     subdir = "scripts",
     
-    -- Required: execution mode
+    -- Optional: execution mode (defaults to "docker")
     executor = "docker",  -- or "native"
     
     -- Optional: default values merged with user params
@@ -239,7 +239,7 @@ end
 ### Startup
 
 1. Create Lua VM
-2. Register `define_tool` as global
+2. Register `tools` table with `define_tool` function
 3. Load kit: `kit = require("init")`
 4. Run user script
 
@@ -320,7 +320,7 @@ Tool definitions can include EmmyLua annotations for editor autocomplete:
 
 ---@param params PrometheusQueryParams
 ---@return { timestamp: string, value: number }[]
-return define_tool({...})
+return tools.define_tool({...})
 ```
 
 ### Large Data

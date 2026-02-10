@@ -19,21 +19,21 @@ const (
 // RunOptions maps to the flags of `envyr run`.
 type RunOptions struct {
 	Source      string   // PROJECT_ROOT (required)
-	SubDir     string   // --sub-dir
-	Entrypoint string   // --entrypoint
-	Tag        string   // --tag
-	Executor   Executor // --executor
-	Autogen    bool     // --autogen
-	Timeout    int      // --timeout (seconds)
-	EnvMap     []string // --env-map entries
-	FsMap      []string // --fs-map entries
-	PortMap    []string // --port-map entries
-	Network    string   // --network
-	Refresh    bool     // --refresh
-	Name       string   // --name
-	Interpreter string  // --interpreter
-	Type       string   // --type (python/node/shell/other)
-	Interactive bool    // --interactive
+	SubDir      string   // --sub-dir
+	Entrypoint  string   // --entrypoint
+	Tag         string   // --tag
+	Executor    Executor // --executor
+	Autogen     bool     // --autogen
+	Timeout     int      // --timeout (seconds)
+	EnvMap      []string // --env-map entries
+	FsMap       []string // --fs-map entries
+	PortMap     []string // --port-map entries
+	Network     string   // --network
+	Refresh     bool     // --refresh
+	Name        string   // --name
+	Interpreter string   // --interpreter
+	Type        string   // --type (python/node/shell/other)
+	Interactive bool     // --interactive
 }
 
 // Client wraps the envyr CLI binary.
@@ -41,6 +41,10 @@ type Client struct {
 	BinPath string // path to envyr binary, defaults to "envyr"
 	Verbose bool   // -v global flag
 	Root    string // --root global override
+}
+
+func NewDefaultClient() *Client {
+	return &Client{}
 }
 
 func (c *Client) binPath() string {
