@@ -8,6 +8,7 @@ import (
 
 	"github.com/peterbourgon/ff/v4"
 	"github.com/peterbourgon/ff/v4/ffhelp"
+	"github.com/tchaudhry91/kael/engine"
 )
 
 // version is set via ldflags during build
@@ -83,8 +84,14 @@ func bootstrap() error {
 }
 
 func runScript(ctx context.Context, kitPath, scriptPath string) error {
-	// TODO: engine integration — load kit, create Lua VM, execute script
-	fmt.Printf("kit:    %s\n", kitPath)
-	fmt.Printf("script: %s\n", scriptPath)
+	e, err := engine.NewEngine(kitPath)
+	if err != nil {
+		return fmt.Errorf("engine init: %w", err)
+	}
+	defer e.Close()
+
+	if err := e.LState.DoFile(scriptPath); err != nil {
+		return err
+	}
 	return nil
 }
