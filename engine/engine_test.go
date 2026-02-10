@@ -79,6 +79,7 @@ func TestDefineToolConfigParsing(t *testing.T) {
 				entrypoint = "run.py",
 				subdir = "scripts",
 				executor = "native",
+				tag = "v1.2.0",
 				defaults = {
 					endpoint = "http://localhost:9090",
 					step = 5,
@@ -112,11 +113,54 @@ func TestDefineToolConfigParsing(t *testing.T) {
 	if mock.lastOpts.Timeout != 30 {
 		t.Errorf("timeout: got %d", mock.lastOpts.Timeout)
 	}
+	if mock.lastOpts.Tag != "v1.2.0" {
+		t.Errorf("tag: got %q", mock.lastOpts.Tag)
+	}
 	if !mock.lastOpts.Autogen {
 		t.Error("autogen should be true")
 	}
 	if len(mock.lastOpts.EnvMap) != 2 || mock.lastOpts.EnvMap[0] != "AWS_PROFILE" || mock.lastOpts.EnvMap[1] != "HOME" {
 		t.Errorf("env: got %v", mock.lastOpts.EnvMap)
+	}
+}
+
+func TestDefineToolTagVariants(t *testing.T) {
+	tests := []struct {
+		name string
+		tag  string
+	}{
+		{"git tag", "v1.0.0"},
+		{"branch", "main"},
+		{"commit hash", "abc1234def5678"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := &mockRunner{output: []byte(`{}`)}
+			e := newTestEngine(t, mock, map[string]string{
+				"init.lua": `
+					local M = {}
+					M.test = require("test")
+					return M
+				`,
+				"test.lua": fmt.Sprintf(`
+					return tools.define_tool({
+						source = "git@github.com:someone/repo.git",
+						tag = "%s",
+					})
+				`, tt.tag),
+			})
+			defer e.Close()
+
+			err := e.LState.DoString(`kit.test({})`)
+			if err != nil {
+				t.Fatalf("tool call failed: %v", err)
+			}
+
+			if mock.lastOpts.Tag != tt.tag {
+				t.Errorf("tag: got %q, want %q", mock.lastOpts.Tag, tt.tag)
+			}
+		})
 	}
 }
 

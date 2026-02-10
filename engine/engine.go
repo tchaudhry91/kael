@@ -15,6 +15,7 @@ type ToolConfig struct {
 	Entrypoint string
 	SubDir     string
 	Executor   string
+	Tag        string // git tag, branch, or commit hash
 	Defaults   map[string]lua.LValue
 	Env        []string
 	Timeout    int
@@ -60,6 +61,10 @@ func (e *Engine) defineTool(L *lua.LState) int {
 
 	if subdir := L.GetField(configTbl, "subdir"); subdir != lua.LNil {
 		cfg.SubDir = subdir.String()
+	}
+
+	if tag := L.GetField(configTbl, "tag"); tag != lua.LNil {
+		cfg.Tag = tag.String()
 	}
 
 	if defaults := L.GetField(configTbl, "defaults"); defaults != lua.LNil {
@@ -123,6 +128,10 @@ func (e *Engine) defineTool(L *lua.LState) int {
 
 		if cfg.Executor != "" {
 			ro.Executor = envyr.Executor(cfg.Executor)
+		}
+
+		if cfg.Tag != "" {
+			ro.Tag = cfg.Tag
 		}
 
 		input := luaToGo(merged)
