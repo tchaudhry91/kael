@@ -57,6 +57,36 @@ func (e *Engine) RegisterTools() {
 	e.lstate.SetGlobal("tools", tools)
 }
 
+func (e *Engine) RegisterHelpers() {
+	// json
+	jsonTbl := e.lstate.NewTable()
+	e.lstate.SetField(jsonTbl, "encode", e.lstate.NewFunction(e.jsonEncode))
+	e.lstate.SetField(jsonTbl, "pretty", e.lstate.NewFunction(e.jsonEncodePretty))
+	e.lstate.SetGlobal("json", jsonTbl)
+}
+
+func (e *Engine) jsonEncode(L *lua.LState) int {
+	val := L.CheckAny(1)
+	valG := luaToGo(val)
+	data, err := json.Marshal(valG)
+	if err != nil {
+		L.RaiseError("Data Marshal Failure: %s", err.Error())
+	}
+	L.Push(lua.LString(string(data)))
+	return 1
+}
+
+func (e *Engine) jsonEncodePretty(L *lua.LState) int {
+	val := L.CheckAny(1)
+	valG := luaToGo(val)
+	data, err := json.MarshalIndent(valG, "", "  ")
+	if err != nil {
+		L.RaiseError("Data Marshal Failure: %s", err.Error())
+	}
+	L.Push(lua.LString(string(data)))
+	return 1
+}
+
 func (e *Engine) defineTool(L *lua.LState) int {
 	configTbl := L.CheckTable(1)
 
@@ -197,6 +227,7 @@ func NewEngine(kitRoot string) (*Engine, error) {
 		Runner:  envyr.NewDefaultClient(),
 	}
 	e.RegisterTools()
+	e.RegisterHelpers()
 	if err := e.lstate.DoString("kit = require(\"init\")"); err != nil {
 		return nil, err
 	}
