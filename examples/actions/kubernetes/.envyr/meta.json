@@ -1,7 +1,0 @@
-{
-  "name": "kubernetes",
-  "interpreter": "/bin/sh",
-  "ptype": "Shell",
-  "deps": [],
-  "entrypoint": "node_capacity.sh"
-}
