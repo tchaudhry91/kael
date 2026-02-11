@@ -38,9 +38,9 @@ func main() {
 	}
 
 	rootCmd := &ff.Command{
-		Name:      "kael",
-		Usage:     "kael [FLAGS] SUBCOMMAND ...",
-		ShortHelp: "Scriptable infrastructure analysis engine",
+		Name:        "kael",
+		Usage:       "kael [FLAGS] SUBCOMMAND ...",
+		ShortHelp:   "Scriptable infrastructure analysis engine",
 		Flags:       rootFlags,
 		Subcommands: []*ff.Command{runCmd},
 		Exec: func(ctx context.Context, args []string) error {
@@ -90,8 +90,5 @@ func runScript(ctx context.Context, kitPath, scriptPath string) error {
 	}
 	defer e.Close()
 
-	if err := e.LState.DoFile(scriptPath); err != nil {
-		return err
-	}
-	return nil
+	return e.RunFile(ctx, scriptPath)
 }

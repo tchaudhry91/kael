@@ -55,7 +55,7 @@ func newTestEngine(t *testing.T, mock *mockRunner, kitFiles map[string]string) *
 
 	e := &Engine{
 		KitRoot: kitDir,
-		LState:  L,
+		lstate:  L,
 		Runner:  mock,
 	}
 	e.RegisterTools()
@@ -92,7 +92,7 @@ func TestDefineToolConfigParsing(t *testing.T) {
 	defer e.Close()
 
 	// Call the tool to trigger the closure, which lets us inspect what mockRunner received
-	err := e.LState.DoString(`kit.test({ query = "up" })`)
+	err := e.RunString(context.Background(), `kit.test({ query = "up" })`)
 	if err != nil {
 		t.Fatalf("tool call failed: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestDefineToolTagVariants(t *testing.T) {
 			})
 			defer e.Close()
 
-			err := e.LState.DoString(`kit.test({})`)
+			err := e.RunString(context.Background(), `kit.test({})`)
 			if err != nil {
 				t.Fatalf("tool call failed: %v", err)
 			}
@@ -180,7 +180,7 @@ func TestDefineToolExecutorDefault(t *testing.T) {
 	})
 	defer e.Close()
 
-	err := e.LState.DoString(`kit.test({})`)
+	err := e.RunString(context.Background(), `kit.test({})`)
 	if err != nil {
 		t.Fatalf("tool call failed: %v", err)
 	}
@@ -210,7 +210,7 @@ func TestDefaultMergingUserWins(t *testing.T) {
 	})
 	defer e.Close()
 
-	err := e.LState.DoString(`kit.test({ endpoint = "http://custom:9090", query = "up" })`)
+	err := e.RunString(context.Background(), `kit.test({ endpoint = "http://custom:9090", query = "up" })`)
 	if err != nil {
 		t.Fatalf("tool call failed: %v", err)
 	}
@@ -253,7 +253,7 @@ func TestToolReturnsParsedOutput(t *testing.T) {
 	defer e.Close()
 
 	// Call the tool and inspect the return value in Lua
-	err := e.LState.DoString(`
+	err := e.RunString(context.Background(), `
 		result = kit.test({})
 		assert(result.count == 1, "expected count=1, got " .. tostring(result.count))
 		assert(result.windows[1].day == "Monday", "expected day=Monday")
@@ -283,13 +283,13 @@ func TestToolRunnerError(t *testing.T) {
 	defer e.Close()
 
 	// Direct call should raise a Lua error
-	err := e.LState.DoString(`kit.test({})`)
+	err := e.RunString(context.Background(), `kit.test({})`)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
 
 	// pcall should catch it
-	err = e.LState.DoString(`
+	err = e.RunString(context.Background(), `
 		local ok, err = pcall(kit.test, {})
 		assert(not ok, "expected pcall to fail")
 		assert(string.find(err, "Tool Run Failure"), "expected Tool Run Failure in error, got: " .. err)
@@ -317,7 +317,7 @@ func TestToolInvalidJSONResponse(t *testing.T) {
 	})
 	defer e.Close()
 
-	err := e.LState.DoString(`
+	err := e.RunString(context.Background(), `
 		local ok, err = pcall(kit.test, {})
 		assert(not ok, "expected pcall to fail")
 		assert(string.find(err, "Data UnMarshal Failure"), "expected unmarshal error, got: " .. err)
@@ -353,7 +353,7 @@ func TestNamespacedKit(t *testing.T) {
 	})
 	defer e.Close()
 
-	err := e.LState.DoString(`
+	err := e.RunString(context.Background(), `
 		local result = kit.prometheus.query({ query = "up" })
 		assert(result.result == "from_query", "expected from_query")
 	`)

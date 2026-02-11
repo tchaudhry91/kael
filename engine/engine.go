@@ -29,18 +29,30 @@ type Runner interface {
 
 type Engine struct {
 	KitRoot string
-	LState  *lua.LState
+	lstate  *lua.LState
 	Runner  Runner
 }
 
 func (e *Engine) Close() {
-	e.LState.Close()
+	e.lstate.Close()
+}
+
+func (e *Engine) RunFile(ctx context.Context, path string) error {
+	e.lstate.SetContext(ctx)
+	defer e.lstate.SetContext(nil)
+	return e.lstate.DoFile(path)
+}
+
+func (e *Engine) RunString(ctx context.Context, code string) error {
+	e.lstate.SetContext(ctx)
+	defer e.lstate.SetContext(nil)
+	return e.lstate.DoString(code)
 }
 
 func (e *Engine) RegisterTools() {
-	tools := e.LState.NewTable()
-	e.LState.SetField(tools, "define_tool", e.LState.NewFunction(e.defineTool))
-	e.LState.SetGlobal("tools", tools)
+	tools := e.lstate.NewTable()
+	e.lstate.SetField(tools, "define_tool", e.lstate.NewFunction(e.defineTool))
+	e.lstate.SetGlobal("tools", tools)
 }
 
 func (e *Engine) defineTool(L *lua.LState) int {
@@ -140,7 +152,7 @@ func (e *Engine) defineTool(L *lua.LState) int {
 			L.RaiseError("Data Marshal Failure: %s", err.Error())
 			return 0
 		}
-		outputB, err := e.Runner.Run(context.Background(), ro, inputB)
+		outputB, err := e.Runner.Run(e.lstate.Context(), ro, inputB)
 		if err != nil {
 			L.RaiseError("Tool Run Failure: %s", err.Error())
 			return 0
@@ -170,11 +182,11 @@ func NewEngine(kitRoot string) (*Engine, error) {
 
 	e := &Engine{
 		KitRoot: kitRoot,
-		LState:  lState,
+		lstate:  lState,
 		Runner:  envyr.NewDefaultClient(),
 	}
 	e.RegisterTools()
-	if err := e.LState.DoString("kit = require(\"init\")"); err != nil {
+	if err := e.lstate.DoString("kit = require(\"init\")"); err != nil {
 		return nil, err
 	}
 
