@@ -29,6 +29,7 @@ type Runner interface {
 
 type Engine struct {
 	KitRoot string
+	Refresh bool
 	lstate  *lua.LState
 	Runner  Runner
 }
@@ -126,6 +127,7 @@ func (e *Engine) defineTool(L *lua.LState) int {
 		ro := envyr.RunOptions{
 			Source:  cfg.Source,
 			Autogen: true,
+			Refresh: e.Refresh,
 			EnvMap:  cfg.Env,
 			Timeout: cfg.Timeout,
 		}

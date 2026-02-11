@@ -21,9 +21,10 @@ func main() {
 	kitPath := rootFlags.StringLong("kit", defaultKitPath(), "path to kit directory")
 
 	runFlags := ff.NewFlagSet("run").SetParent(rootFlags)
+	refresh := runFlags.BoolLong("refresh", "force re-fetch of tool sources")
 	runCmd := &ff.Command{
 		Name:      "run",
-		Usage:     "kael [--kit PATH] run <script.lua>",
+		Usage:     "kael [--kit PATH] run [--refresh] <script.lua>",
 		ShortHelp: "Run a Lua script",
 		Flags:     runFlags,
 		Exec: func(ctx context.Context, args []string) error {
@@ -33,7 +34,7 @@ func main() {
 			if err := bootstrap(); err != nil {
 				return fmt.Errorf("bootstrap: %w", err)
 			}
-			return runScript(ctx, *kitPath, args[0])
+			return runScript(ctx, *kitPath, *refresh, args[0])
 		},
 	}
 
@@ -48,7 +49,7 @@ func main() {
 		},
 	}
 
-	if err := rootCmd.ParseAndRun(context.Background(), os.Args[1:]); err != nil {
+	if err := rootCmd.ParseAndRun(context.Background(), os.Args[1:], ff.WithEnvVarPrefix("KAEL")); err != nil {
 		if *versionFlag {
 			fmt.Printf("kael version %s\n", version)
 			return
@@ -83,12 +84,13 @@ func bootstrap() error {
 	return os.MkdirAll(kaelDir, 0755)
 }
 
-func runScript(ctx context.Context, kitPath, scriptPath string) error {
+func runScript(ctx context.Context, kitPath string, refresh bool, scriptPath string) error {
 	e, err := engine.NewEngine(kitPath)
 	if err != nil {
 		return fmt.Errorf("engine init: %w", err)
 	}
 	defer e.Close()
 
+	e.Refresh = refresh
 	return e.RunFile(ctx, scriptPath)
 }
