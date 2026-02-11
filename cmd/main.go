@@ -58,11 +58,11 @@ func main() {
 			fmt.Println(ffhelp.Command(rootCmd))
 			return
 		}
-		fmt.Println(ffhelp.Command(rootCmd))
 		if err.Error() == "no subcommand provided" {
+			fmt.Println(ffhelp.Command(rootCmd))
 			os.Exit(0)
 		}
-		fmt.Printf("error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 }

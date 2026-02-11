@@ -8,11 +8,11 @@ def main():
     namespace = params.get("namespace", "default")
     threshold = params.get("threshold", 0)
 
-    cmd = [
-        "kubectl", "get", "pods",
-        "-n", namespace,
-        "-o", "json",
-    ]
+    cmd = ["kubectl", "get", "pods", "-o", "json"]
+    if namespace == "all":
+        cmd.append("--all-namespaces")
+    else:
+        cmd.extend(["-n", namespace])
 
     result = subprocess.run(cmd, capture_output=True, text=True, check=True)
     data = json.loads(result.stdout)
