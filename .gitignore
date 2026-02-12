@@ -32,6 +32,7 @@ go.work.sum
 
 # Envyr
 .envyr/
+.kael/
 
 # Editor/IDE
 .idea/
