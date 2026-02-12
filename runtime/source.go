@@ -127,9 +127,11 @@ func parseGitURL(url string) (provider, orgRepo string) {
 
 func gitClone(url, dest string) error {
 	cmd := exec.Command("git", "clone", url, dest)
-	cmd.Stdout = os.Stderr // progress to stderr
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%w: %s", err, string(out))
+	}
+	return nil
 }
 
 func gitFetch(dir string) error {
@@ -155,9 +157,11 @@ func gitResetHard(dir, ref string) error {
 func gitCheckout(dir, ref string) error {
 	cmd := exec.Command("git", "checkout", ref)
 	cmd.Dir = dir
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%w: %s", err, string(out))
+	}
+	return nil
 }
 
 // gitDefaultBranch detects the default branch name (main/master).

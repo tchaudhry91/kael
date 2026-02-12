@@ -84,10 +84,11 @@ func ensureImage(ctx context.Context, runtime, sourcePath string, opts RunOption
 		"-f", dockerfilePath,
 		sourcePath,
 	)
-	buildCmd.Stdout = os.Stderr
-	buildCmd.Stderr = os.Stderr
+	var buildOut bytes.Buffer
+	buildCmd.Stdout = &buildOut
+	buildCmd.Stderr = &buildOut
 	if err := buildCmd.Run(); err != nil {
-		return "", fmt.Errorf("docker build: %w", err)
+		return "", fmt.Errorf("docker build: %w\n%s", err, buildOut.String())
 	}
 
 	return image, nil
