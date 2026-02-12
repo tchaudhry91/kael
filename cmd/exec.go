@@ -9,31 +9,34 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/peterbourgon/ff/v4"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"github.com/tchaudhry91/kael/engine"
 )
 
-func newExecCmd(rootFlags *ff.FlagSet, kitPath *string) *ff.Command {
-	execFlags := ff.NewFlagSet("exec").SetParent(rootFlags)
-	refresh := execFlags.BoolLong("refresh", "force re-fetch of tool sources")
-
-	return &ff.Command{
-		Name:      "exec",
-		Usage:     "kael [--kit PATH] exec <tool.path> [--key value ...]",
-		ShortHelp: "Execute a single tool from the kit",
-		Flags:     execFlags,
-		Exec: func(ctx context.Context, args []string) error {
-			if len(args) == 0 {
-				return fmt.Errorf("tool path is required (e.g. misc.download)")
-			}
+func newExecCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "exec [flags] <tool.path> [--key value ...]",
+		Short: "Execute a single tool from the kit",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := bootstrap(); err != nil {
 				return fmt.Errorf("bootstrap: %w", err)
 			}
 			toolPath := args[0]
 			toolArgs := args[1:]
-			return execTool(ctx, *kitPath, *refresh, toolPath, toolArgs)
+			return execTool(cmd.Context(), viper.GetString("kit"), viper.GetBool("refresh"), toolPath, toolArgs)
 		},
 	}
+
+	// Stop flag parsing after first positional arg (tool path)
+	// so that --key value pairs pass through as positional args
+	cmd.Flags().SetInterspersed(false)
+
+	cmd.Flags().Bool("refresh", false, "force re-fetch of tool sources")
+	viper.BindPFlag("refresh", cmd.Flags().Lookup("refresh"))
+
+	return cmd
 }
 
 func execTool(ctx context.Context, kitPath string, refresh bool, toolPath string, toolArgs []string) error {

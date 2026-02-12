@@ -4,29 +4,28 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/peterbourgon/ff/v4"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"github.com/tchaudhry91/kael/engine"
 )
 
-func newRunCmd(rootFlags *ff.FlagSet, kitPath *string) *ff.Command {
-	runFlags := ff.NewFlagSet("run").SetParent(rootFlags)
-	refresh := runFlags.BoolLong("refresh", "force re-fetch of tool sources")
-
-	return &ff.Command{
-		Name:      "run",
-		Usage:     "kael [--kit PATH] run [--refresh] <script.lua>",
-		ShortHelp: "Run a Lua script",
-		Flags:     runFlags,
-		Exec: func(ctx context.Context, args []string) error {
-			if len(args) == 0 {
-				return fmt.Errorf("script path is required")
-			}
+func newRunCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "run [flags] <script.lua>",
+		Short: "Run a Lua script",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := bootstrap(); err != nil {
 				return fmt.Errorf("bootstrap: %w", err)
 			}
-			return runScript(ctx, *kitPath, *refresh, args[0])
+			return runScript(cmd.Context(), viper.GetString("kit"), viper.GetBool("refresh"), args[0])
 		},
 	}
+
+	cmd.Flags().Bool("refresh", false, "force re-fetch of tool sources")
+	viper.BindPFlag("refresh", cmd.Flags().Lookup("refresh"))
+
+	return cmd
 }
 
 func runScript(ctx context.Context, kitPath string, refresh bool, scriptPath string) error {

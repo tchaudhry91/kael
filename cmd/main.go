@@ -1,65 +1,66 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/peterbourgon/ff/v4"
-	"github.com/peterbourgon/ff/v4/ffhelp"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 // version is set via ldflags during build
 var version = "dev"
 
-func main() {
-	rootFlags := ff.NewFlagSet("kael")
-	helpFlag := rootFlags.BoolLong("help", "h")
-	versionFlag := rootFlags.BoolLong("version", "v")
-	kitPath := rootFlags.StringLong("kit", defaultKitPath(), "path to kit directory")
-
-	rootCmd := &ff.Command{
-		Name:      "kael",
-		Usage:     "kael [FLAGS] SUBCOMMAND ...",
-		ShortHelp: "Scriptable infrastructure analysis engine",
-		Flags:     rootFlags,
-		Subcommands: []*ff.Command{
-			newRunCmd(rootFlags, kitPath),
-			newExecCmd(rootFlags, kitPath),
-			newKitCmd(rootFlags, kitPath),
-		},
-		Exec: func(ctx context.Context, args []string) error {
-			if len(args) > 0 && strings.HasSuffix(args[0], ".lua") {
-				if err := bootstrap(); err != nil {
-					return fmt.Errorf("bootstrap: %w", err)
-				}
-				return runScript(ctx, *kitPath, false, args[0])
+var rootCmd = &cobra.Command{
+	Use:     "kael [flags] [subcommand]",
+	Short:   "Scriptable infrastructure analysis engine",
+	Version: version,
+	Args:    cobra.ArbitraryArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 && strings.HasSuffix(args[0], ".lua") {
+			if err := bootstrap(); err != nil {
+				return fmt.Errorf("bootstrap: %w", err)
 			}
-			return fmt.Errorf("no subcommand provided")
-		},
-	}
-
-	if err := rootCmd.Parse(os.Args[1:], ff.WithEnvVarPrefix("KAEL")); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
-	}
-
-	if *versionFlag {
-		fmt.Printf("kael version %s\n", version)
-		return
-	}
-	if *helpFlag {
-		fmt.Println(ffhelp.Command(rootCmd))
-		return
-	}
-
-	if err := rootCmd.Run(context.Background()); err != nil {
-		if err.Error() == "no subcommand provided" {
-			fmt.Println(ffhelp.Command(rootCmd))
-			os.Exit(0)
+			return runScript(cmd.Context(), viper.GetString("kit"), false, args[0])
 		}
+		return cmd.Help()
+	},
+	SilenceUsage:  true,
+	SilenceErrors: true,
+}
+
+func init() {
+	cobra.OnInitialize(initConfig)
+
+	rootCmd.PersistentFlags().String("kit", defaultKitPath(), "path to kit directory")
+	viper.BindPFlag("kit", rootCmd.PersistentFlags().Lookup("kit"))
+
+	rootCmd.SetVersionTemplate("kael version {{.Version}}\n")
+
+	rootCmd.AddCommand(newRunCmd())
+	rootCmd.AddCommand(newExecCmd())
+	rootCmd.AddCommand(newKitCmd())
+}
+
+func initConfig() {
+	viper.SetEnvPrefix("KAEL")
+	viper.AutomaticEnv()
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
+
+	home, err := os.UserHomeDir()
+	if err == nil {
+		viper.AddConfigPath(filepath.Join(home, ".kael"))
+		viper.SetConfigName("config")
+		viper.SetConfigType("yaml")
+	}
+	// Silently ignore missing config file
+	viper.ReadInConfig()
+}
+
+func main() {
+	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}

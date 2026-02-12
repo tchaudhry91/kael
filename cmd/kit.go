@@ -1,77 +1,68 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
-	"github.com/peterbourgon/ff/v4"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"github.com/tchaudhry91/kael/engine"
 )
 
-func newKitCmd(rootFlags *ff.FlagSet, kitPath *string) *ff.Command {
-	kitFlags := ff.NewFlagSet("kit").SetParent(rootFlags)
-
-	listCmd := &ff.Command{
-		Name:      "list",
-		Usage:     "kael [--kit PATH] kit list",
-		ShortHelp: "List all tools in the kit",
-		Flags:     ff.NewFlagSet("list").SetParent(kitFlags),
-		Exec: func(ctx context.Context, args []string) error {
-			return kitList(*kitPath)
+func newKitCmd() *cobra.Command {
+	kitCmd := &cobra.Command{
+		Use:   "kit [subcommand]",
+		Short: "Inspect and manage the tool kit",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cmd.Help()
 		},
 	}
 
-	validateCmd := &ff.Command{
-		Name:      "validate",
-		Usage:     "kael [--kit PATH] kit validate",
-		ShortHelp: "Validate the kit loads without errors",
-		Flags:     ff.NewFlagSet("validate").SetParent(kitFlags),
-		Exec: func(ctx context.Context, args []string) error {
-			return kitValidate(*kitPath)
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List all tools in the kit",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return kitList(viper.GetString("kit"))
 		},
 	}
 
-	initCmd := &ff.Command{
-		Name:      "init",
-		Usage:     "kael [--kit PATH] kit init [namespace]",
-		ShortHelp: "Initialize kit directory or add a namespace",
-		Flags:     ff.NewFlagSet("init").SetParent(kitFlags),
-		Exec: func(ctx context.Context, args []string) error {
+	validateCmd := &cobra.Command{
+		Use:   "validate",
+		Short: "Validate the kit loads without errors",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return kitValidate(viper.GetString("kit"))
+		},
+	}
+
+	initCmd := &cobra.Command{
+		Use:   "init [namespace]",
+		Short: "Initialize kit directory or add a namespace",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
 			namespace := ""
 			if len(args) > 0 {
 				namespace = args[0]
 			}
-			return kitInit(*kitPath, namespace)
+			return kitInit(viper.GetString("kit"), namespace)
 		},
 	}
 
-	describeCmd := &ff.Command{
-		Name:      "describe",
-		Usage:     "kael [--kit PATH] kit describe <tool.path>",
-		ShortHelp: "Show details of a specific tool",
-		Flags:     ff.NewFlagSet("describe").SetParent(kitFlags),
-		Exec: func(ctx context.Context, args []string) error {
-			if len(args) == 0 {
-				return fmt.Errorf("tool path is required (e.g. kubernetes.pods_on_node)")
-			}
-			return kitDescribe(*kitPath, args[0])
+	describeCmd := &cobra.Command{
+		Use:   "describe <tool.path>",
+		Short: "Show details of a specific tool",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return kitDescribe(viper.GetString("kit"), args[0])
 		},
 	}
 
-	return &ff.Command{
-		Name:        "kit",
-		Usage:       "kael [--kit PATH] kit SUBCOMMAND",
-		ShortHelp:   "Inspect and manage the tool kit",
-		Flags:       kitFlags,
-		Subcommands: []*ff.Command{initCmd, listCmd, validateCmd, describeCmd},
-		Exec: func(ctx context.Context, args []string) error {
-			return fmt.Errorf("kit subcommand required: init, list, validate, describe")
-		},
-	}
+	kitCmd.AddCommand(listCmd, validateCmd, initCmd, describeCmd)
+	return kitCmd
 }
 
 func kitList(kitPath string) error {
