@@ -25,10 +25,13 @@ func detectContainerRuntime() (string, error) {
 	return "", fmt.Errorf("neither docker nor podman found on PATH")
 }
 
-// imageName derives a docker image name from the source path.
-// /home/user/my-project → kael-home-user-my-project:latest
-func imageName(sourcePath, tag string) string {
+// imageName derives a docker image name from the source path and entrypoint.
+// /home/user/my-project + script.py → kael-home-user-my-project-script-py:latest
+func imageName(sourcePath, entrypoint, tag string) string {
 	name := strings.ToLower(sourcePath)
+	if entrypoint != "" {
+		name += "/" + strings.ToLower(entrypoint)
+	}
 	name = strings.NewReplacer("/", "-", ".", "-", ":", "-", "@", "-").Replace(name)
 	name = strings.TrimLeft(name, "-")
 	if tag == "" {
@@ -53,7 +56,7 @@ func ensureImage(ctx context.Context, runtime, sourcePath string, opts RunOption
 	if tag == "" {
 		tag = "latest"
 	}
-	image := imageName(sourcePath, tag)
+	image := imageName(sourcePath, opts.Entrypoint, tag)
 
 	if !opts.Refresh && imageExists(ctx, runtime, image) {
 		return image, nil
