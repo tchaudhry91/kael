@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/tchaudhry91/kael/envyr"
 	"github.com/yuin/gopher-lua"
@@ -290,6 +291,47 @@ func (e *Engine) defineTool(L *lua.LState) int {
 	e.Registry[toolFn] = cfg
 	L.Push(toolFn)
 	return 1
+}
+
+// ExecTool resolves a dotted tool path (e.g. "misc.download") to its Lua function
+// and calls it with the given input map. Returns the output as a Go value.
+func (e *Engine) ExecTool(ctx context.Context, toolPath string, input map[string]any) (any, error) {
+	e.lstate.SetContext(ctx)
+	defer e.lstate.SetContext(nil)
+
+	// Walk kit.<namespace>.<tool> to find the Lua function
+	parts := strings.Split(toolPath, ".")
+	var current lua.LValue = e.lstate.GetGlobal("kit")
+	for _, part := range parts {
+		tbl, ok := current.(*lua.LTable)
+		if !ok {
+			return nil, fmt.Errorf("cannot resolve %q: %q is not a table", toolPath, part)
+		}
+		current = e.lstate.GetField(tbl, part)
+		if current == lua.LNil {
+			return nil, fmt.Errorf("tool %q not found", toolPath)
+		}
+	}
+
+	fn, ok := current.(*lua.LFunction)
+	if !ok {
+		return nil, fmt.Errorf("%q is not a tool function", toolPath)
+	}
+
+	// Build the input table
+	inputTbl := goToLua(e.lstate, map[string]any(input))
+
+	if err := e.lstate.CallByParam(lua.P{
+		Fn:      fn,
+		NRet:    1,
+		Protect: true,
+	}, inputTbl); err != nil {
+		return nil, fmt.Errorf("tool execution failed: %w", err)
+	}
+
+	ret := e.lstate.Get(-1)
+	e.lstate.Pop(1)
+	return luaToGo(ret), nil
 }
 
 func NewEngine(kitRoot string) (*Engine, error) {

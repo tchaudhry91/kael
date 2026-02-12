@@ -26,6 +26,7 @@ func main() {
 		Flags:     rootFlags,
 		Subcommands: []*ff.Command{
 			newRunCmd(rootFlags, kitPath),
+			newExecCmd(rootFlags, kitPath),
 			newKitCmd(rootFlags, kitPath),
 		},
 		Exec: func(ctx context.Context, args []string) error {
