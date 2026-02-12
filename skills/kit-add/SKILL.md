@@ -27,6 +27,12 @@ Determine if `$ARGUMENTS[0]` is a local path or a git URL. Then read the action 
    - For output: read what gets written to stdout
 5. **Source**: For local scripts, the directory containing the script. For git repos, the git URL.
 6. **Entrypoint**: The script filename (may need auto-detection for git repos)
+7. **Environment variables**: What host env vars does the script need?
+   - For Python: look for `os.environ["VAR"]`, `os.environ.get("VAR")`, `os.getenv("VAR")`
+   - For bash: look for `$VAR`, `${VAR}`, `${VAR:-default}`
+   - For node: look for `process.env.VAR`
+   - Common ones: `KUBECONFIG`, `AWS_PROFILE`, `AWS_REGION`, `HOME`, `PATH`, `DOCKER_HOST`
+   - If any are found, add them to the `env` field as an array of variable names
 
 ## Resolving the source
 
