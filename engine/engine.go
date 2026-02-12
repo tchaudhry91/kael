@@ -17,10 +17,12 @@ type ToolConfig struct {
 	Executor   string
 	Tag        string // git tag, branch, or commit hash
 	Type       string // python, node, shell, other
-	Schema     *ToolSchema
-	Defaults   map[string]lua.LValue
-	Env        []string
-	Timeout    int
+	Schema       *ToolSchema
+	InputAdapter string // "json" (default) or "args"
+	OutputAdapter string // "json" (default), "text", or "lines"
+	Defaults     map[string]lua.LValue
+	Env          []string
+	Timeout      int
 }
 
 // KitNode represents a node in the kit tree. It can contain tools (leaf functions)
@@ -201,6 +203,13 @@ func (e *Engine) defineTool(L *lua.LState) int {
 		}
 	}
 
+	if ia := L.GetField(configTbl, "input_adapter"); ia != lua.LNil {
+		cfg.InputAdapter = ia.String()
+	}
+	if oa := L.GetField(configTbl, "output_adapter"); oa != lua.LNil {
+		cfg.OutputAdapter = oa.String()
+	}
+
 	cfg.Schema = parseSchema(L, configTbl)
 
 	toolFn := L.NewFunction(func(L *lua.LState) int {
@@ -252,22 +261,24 @@ func (e *Engine) defineTool(L *lua.LState) int {
 			ro.Type = cfg.Type
 		}
 
-		input := luaToGo(merged)
-		inputB, err := json.Marshal(input)
+		inputB, extraArgs, err := adaptInput(cfg.InputAdapter, merged)
 		if err != nil {
-			L.RaiseError("Data Marshal Failure: %s", err.Error())
+			L.RaiseError("%s", err.Error())
 			return 0
 		}
+		if len(extraArgs) > 0 {
+			ro.ExtraArgs = extraArgs
+		}
+
 		outputB, err := e.Runner.Run(e.lstate.Context(), ro, inputB)
 		if err != nil {
 			L.RaiseError("Tool Run Failure: %s", err.Error())
 			return 0
 		}
 
-		var output any
-		err = json.Unmarshal(outputB, &output)
+		output, err := adaptOutput(cfg.OutputAdapter, outputB)
 		if err != nil {
-			L.RaiseError("Data UnMarshal Failure: %s", err.Error())
+			L.RaiseError("%s", err.Error())
 			return 0
 		}
 		outputL := goToLua(L, output)

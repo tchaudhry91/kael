@@ -1,5 +1,7 @@
 local opts = {
 	source = "git@github.com:tchaudhry91/python-html-downloader",
+	input_adapter = "json",
+	output_adapter = "json",
 	schema = {
 		input = {
 			url = "string",

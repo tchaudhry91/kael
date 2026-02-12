@@ -34,6 +34,7 @@ type RunOptions struct {
 	Interpreter string   // --interpreter
 	Type        string   // --type (python/node/shell/other)
 	Interactive bool     // --interactive
+	ExtraArgs   []string // passthrough args after --
 }
 
 // Client wraps the envyr CLI binary.
@@ -114,8 +115,14 @@ func (c *Client) buildArgs(opts RunOptions) []string {
 		args = append(args, "--interactive")
 	}
 
-	// PROJECT_ROOT is the positional argument, must come last.
+	// PROJECT_ROOT is the positional argument.
 	args = append(args, opts.Source)
+
+	// Passthrough args go after --.
+	if len(opts.ExtraArgs) > 0 {
+		args = append(args, "--")
+		args = append(args, opts.ExtraArgs...)
+	}
 
 	return args
 }

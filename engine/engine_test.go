@@ -202,6 +202,8 @@ func TestDefaultMergingUserWins(t *testing.T) {
 		"test.lua": `
 			return tools.define_tool({
 				source = "git@github.com:someone/repo.git",
+				input_adapter = "json",
+				output_adapter = "json",
 				defaults = {
 					endpoint = "http://default:9090",
 					step = 5,
@@ -248,6 +250,8 @@ func TestToolReturnsParsedOutput(t *testing.T) {
 		"test.lua": `
 			return tools.define_tool({
 				source = "git@github.com:someone/repo.git",
+				input_adapter = "json",
+				output_adapter = "json",
 			})
 		`,
 	})
@@ -313,6 +317,7 @@ func TestToolInvalidJSONResponse(t *testing.T) {
 		"test.lua": `
 			return tools.define_tool({
 				source = "git@github.com:someone/repo.git",
+				output_adapter = "json",
 			})
 		`,
 	})
@@ -346,6 +351,8 @@ func TestNamespacedKit(t *testing.T) {
 				source = "git@github.com:someone/prometheus-tools.git",
 				entrypoint = "query.py",
 				executor = "docker",
+				input_adapter = "json",
+				output_adapter = "json",
 				defaults = {
 					endpoint = "http://prometheus:9090",
 				},
@@ -641,4 +648,195 @@ func TestNoSchemaStillWorks(t *testing.T) {
 	if cfg.Schema != nil {
 		t.Error("expected nil schema when none declared")
 	}
+}
+
+func TestInputAdapterArgs(t *testing.T) {
+	mock := &mockRunner{output: []byte(`{}`)}
+	e := newTestEngine(t, mock, map[string]string{
+		"init.lua": `
+			local M = {}
+			M.test = require("test")
+			return M
+		`,
+		"test.lua": `
+			return tools.define_tool({
+				source = "git@github.com:someone/repo.git",
+				input_adapter = "args",
+			})
+		`,
+	})
+	defer e.Close()
+
+	err := e.RunString(context.Background(), `kit.test({ name = "world", count = 3 })`)
+	if err != nil {
+		t.Fatalf("tool call failed: %v", err)
+	}
+
+	// stdin should be nil/empty for args adapter
+	if len(mock.lastInput) > 0 {
+		t.Errorf("expected empty stdin for args adapter, got %q", mock.lastInput)
+	}
+
+	// ExtraArgs should contain the flags
+	args := mock.lastOpts.ExtraArgs
+	if len(args) == 0 {
+		t.Fatal("expected ExtraArgs to be populated")
+	}
+
+	// Check that args contain --name world and --count 3
+	argStr := fmt.Sprintf("%v", args)
+	if !containsFlag(args, "--name", "world") {
+		t.Errorf("expected --name world in args, got %s", argStr)
+	}
+	if !containsFlag(args, "--count", "3") {
+		t.Errorf("expected --count 3 in args, got %s", argStr)
+	}
+}
+
+func TestInputAdapterArgsBooleans(t *testing.T) {
+	mock := &mockRunner{output: []byte(`{}`)}
+	e := newTestEngine(t, mock, map[string]string{
+		"init.lua": `
+			local M = {}
+			M.test = require("test")
+			return M
+		`,
+		"test.lua": `
+			return tools.define_tool({
+				source = "git@github.com:someone/repo.git",
+				input_adapter = "args",
+			})
+		`,
+	})
+	defer e.Close()
+
+	err := e.RunString(context.Background(), `kit.test({ verbose = true, quiet = false, name = "test" })`)
+	if err != nil {
+		t.Fatalf("tool call failed: %v", err)
+	}
+
+	args := mock.lastOpts.ExtraArgs
+	// true boolean should produce --verbose (no value)
+	found := false
+	for i, a := range args {
+		if a == "--verbose" {
+			// Next arg should NOT be "true" — it's a standalone flag
+			if i+1 < len(args) && args[i+1] != "true" {
+				found = true
+			} else if i+1 >= len(args) {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Errorf("expected standalone --verbose flag, got %v", args)
+	}
+
+	// false boolean should be omitted entirely
+	for _, a := range args {
+		if a == "--quiet" {
+			t.Errorf("expected --quiet to be omitted for false value, got %v", args)
+		}
+	}
+}
+
+func TestOutputAdapterText(t *testing.T) {
+	mock := &mockRunner{output: []byte("Hello, this is plain text output\nLine 2\n")}
+	e := newTestEngine(t, mock, map[string]string{
+		"init.lua": `
+			local M = {}
+			M.test = require("test")
+			return M
+		`,
+		"test.lua": `
+			return tools.define_tool({
+				source = "git@github.com:someone/repo.git",
+				output_adapter = "text",
+			})
+		`,
+	})
+	defer e.Close()
+
+	err := e.RunString(context.Background(), `
+		local result = kit.test({})
+		assert(result.output ~= nil, "expected output field")
+		assert(string.find(result.output, "Hello"), "expected Hello in output")
+		assert(string.find(result.output, "Line 2"), "expected Line 2 in output")
+	`)
+	if err != nil {
+		t.Fatalf("text adapter test failed: %v", err)
+	}
+}
+
+func TestOutputAdapterLines(t *testing.T) {
+	mock := &mockRunner{output: []byte("line1\nline2\nline3\n")}
+	e := newTestEngine(t, mock, map[string]string{
+		"init.lua": `
+			local M = {}
+			M.test = require("test")
+			return M
+		`,
+		"test.lua": `
+			return tools.define_tool({
+				source = "git@github.com:someone/repo.git",
+				output_adapter = "lines",
+			})
+		`,
+	})
+	defer e.Close()
+
+	err := e.RunString(context.Background(), `
+		local result = kit.test({})
+		assert(result.lines ~= nil, "expected lines field")
+		assert(#result.lines == 3, "expected 3 lines, got " .. #result.lines)
+		assert(result.lines[1] == "line1", "expected line1, got " .. result.lines[1])
+		assert(result.lines[3] == "line3", "expected line3, got " .. result.lines[3])
+	`)
+	if err != nil {
+		t.Fatalf("lines adapter test failed: %v", err)
+	}
+}
+
+func TestDefaultAdaptersArgsAndText(t *testing.T) {
+	// No adapter specified — defaults are args input + text output
+	mock := &mockRunner{output: []byte("some plain output")}
+	e := newTestEngine(t, mock, map[string]string{
+		"init.lua": `
+			local M = {}
+			M.test = require("test")
+			return M
+		`,
+		"test.lua": `
+			return tools.define_tool({
+				source = "git@github.com:someone/repo.git",
+			})
+		`,
+	})
+	defer e.Close()
+
+	err := e.RunString(context.Background(), `
+		local result = kit.test({ name = "world" })
+		assert(result.output == "some plain output", "expected text in output field, got " .. tostring(result.output))
+	`)
+	if err != nil {
+		t.Fatalf("default adapter test failed: %v", err)
+	}
+
+	// Input should have gone as args, not stdin
+	if len(mock.lastInput) > 0 {
+		t.Errorf("expected empty stdin for default args adapter, got %q", mock.lastInput)
+	}
+	if !containsFlag(mock.lastOpts.ExtraArgs, "--name", "world") {
+		t.Errorf("expected --name world in ExtraArgs, got %v", mock.lastOpts.ExtraArgs)
+	}
+}
+
+// containsFlag checks if args contains --key followed by value.
+func containsFlag(args []string, key, value string) bool {
+	for i := 0; i < len(args)-1; i++ {
+		if args[i] == key && args[i+1] == value {
+			return true
+		}
+	}
+	return false
 }
