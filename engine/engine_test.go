@@ -54,9 +54,10 @@ func newTestEngine(t *testing.T, mock *mockRunner, kitFiles map[string]string) *
 	))
 
 	e := &Engine{
-		KitRoot: kitDir,
-		lstate:  L,
-		Runner:  mock,
+		KitRoot:  kitDir,
+		lstate:   L,
+		Runner:   mock,
+		Registry: make(map[*lua.LFunction]ToolConfig),
 	}
 	e.RegisterTools()
 	if err := L.DoString("kit = require(\"init\")"); err != nil {
@@ -366,5 +367,98 @@ func TestNamespacedKit(t *testing.T) {
 	}
 	if mock.lastOpts.Entrypoint != "query.py" {
 		t.Errorf("entrypoint: got %q", mock.lastOpts.Entrypoint)
+	}
+}
+
+func TestListTools(t *testing.T) {
+	mock := &mockRunner{output: []byte(`{}`)}
+	e := newTestEngine(t, mock, map[string]string{
+		"init.lua": `
+			local M = {}
+			M.prometheus = require("prometheus")
+			M.kubernetes = require("kubernetes")
+			return M
+		`,
+		"prometheus/init.lua": `
+			local M = {}
+			M.query = require("prometheus.query")
+			return M
+		`,
+		"prometheus/query.lua": `
+			return tools.define_tool({
+				source = "git@github.com:someone/prometheus-tools.git",
+				entrypoint = "query.py",
+				executor = "docker",
+			})
+		`,
+		"kubernetes/init.lua": `
+			local M = {}
+			M.nodes = require("kubernetes.nodes")
+			M.pods = require("kubernetes.pods")
+			return M
+		`,
+		"kubernetes/nodes.lua": `
+			return tools.define_tool({
+				source = "/local/k8s-tools",
+				entrypoint = "nodes.sh",
+				executor = "native",
+				type = "shell",
+			})
+		`,
+		"kubernetes/pods.lua": `
+			return tools.define_tool({
+				source = "/local/k8s-tools",
+				entrypoint = "pods.py",
+				executor = "native",
+				type = "python",
+			})
+		`,
+	})
+	defer e.Close()
+
+	root := e.ListTools()
+
+	// Check namespaces exist
+	if _, ok := root.Children["prometheus"]; !ok {
+		t.Fatal("expected prometheus namespace")
+	}
+	if _, ok := root.Children["kubernetes"]; !ok {
+		t.Fatal("expected kubernetes namespace")
+	}
+
+	// Check prometheus tools
+	prom := root.Children["prometheus"]
+	if cfg, ok := prom.Tools["query"]; !ok {
+		t.Error("expected prometheus.query tool")
+	} else {
+		if cfg.Source != "git@github.com:someone/prometheus-tools.git" {
+			t.Errorf("prometheus.query source: got %q", cfg.Source)
+		}
+		if cfg.Entrypoint != "query.py" {
+			t.Errorf("prometheus.query entrypoint: got %q", cfg.Entrypoint)
+		}
+		if cfg.Executor != "docker" {
+			t.Errorf("prometheus.query executor: got %q", cfg.Executor)
+		}
+	}
+
+	// Check kubernetes tools
+	k8s := root.Children["kubernetes"]
+	if cfg, ok := k8s.Tools["nodes"]; !ok {
+		t.Error("expected kubernetes.nodes tool")
+	} else {
+		if cfg.Executor != "native" {
+			t.Errorf("kubernetes.nodes executor: got %q", cfg.Executor)
+		}
+		if cfg.Type != "shell" {
+			t.Errorf("kubernetes.nodes type: got %q", cfg.Type)
+		}
+	}
+	if cfg, ok := k8s.Tools["pods"]; !ok {
+		t.Error("expected kubernetes.pods tool")
+	} else {
+		if cfg.Type != "python" {
+			t.Errorf("kubernetes.pods type: got %q", cfg.Type)
+		}
 	}
 }

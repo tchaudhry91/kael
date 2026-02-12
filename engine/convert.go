@@ -1,6 +1,10 @@
 package engine
 
 import (
+	"fmt"
+	"sort"
+	"strings"
+
 	"github.com/yuin/gopher-lua"
 )
 
@@ -32,6 +36,55 @@ func luaToGo(lv lua.LValue) any {
 		return m
 	default:
 		return nil
+	}
+}
+
+// formatLuaValue produces a human-readable string representation of a Lua value.
+func formatLuaValue(lv lua.LValue, indent string) string {
+	switch v := lv.(type) {
+	case *lua.LNilType:
+		return "nil"
+	case lua.LBool:
+		return fmt.Sprintf("%v", bool(v))
+	case lua.LNumber:
+		return fmt.Sprintf("%g", float64(v))
+	case lua.LString:
+		return fmt.Sprintf("%q", string(v))
+	case *lua.LTable:
+		if v.MaxN() == 0 && v.Len() == 0 {
+			// Check if truly empty
+			empty := true
+			v.ForEach(func(_, _ lua.LValue) { empty = false })
+			if empty {
+				return "{}"
+			}
+		}
+		var lines []string
+		nextIndent := indent + "  "
+
+		// Array part
+		maxN := v.MaxN()
+		for i := 1; i <= maxN; i++ {
+			lines = append(lines, nextIndent+formatLuaValue(v.RawGetInt(i), nextIndent))
+		}
+
+		// Map part (collect and sort keys for stable output)
+		var keys []string
+		v.ForEach(func(key, _ lua.LValue) {
+			if num, ok := key.(lua.LNumber); ok && int(num) >= 1 && int(num) <= maxN {
+				return // skip array keys
+			}
+			keys = append(keys, key.String())
+		})
+		sort.Strings(keys)
+		for _, k := range keys {
+			val := v.RawGetString(k)
+			lines = append(lines, fmt.Sprintf("%s%s = %s", nextIndent, k, formatLuaValue(val, nextIndent)))
+		}
+
+		return "{\n" + strings.Join(lines, ",\n") + "\n" + indent + "}"
+	default:
+		return lv.String()
 	}
 }
 

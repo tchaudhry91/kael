@@ -49,15 +49,21 @@ func main() {
 		},
 	}
 
-	if err := rootCmd.ParseAndRun(context.Background(), os.Args[1:], ff.WithEnvVarPrefix("KAEL")); err != nil {
-		if *versionFlag {
-			fmt.Printf("kael version %s\n", version)
-			return
-		}
-		if *helpFlag {
-			fmt.Println(ffhelp.Command(rootCmd))
-			return
-		}
+	if err := rootCmd.Parse(os.Args[1:], ff.WithEnvVarPrefix("KAEL")); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	if *versionFlag {
+		fmt.Printf("kael version %s\n", version)
+		return
+	}
+	if *helpFlag {
+		fmt.Println(ffhelp.Command(rootCmd))
+		return
+	}
+
+	if err := rootCmd.Run(context.Background()); err != nil {
 		if err.Error() == "no subcommand provided" {
 			fmt.Println(ffhelp.Command(rootCmd))
 			os.Exit(0)

@@ -22,6 +22,13 @@ type ToolConfig struct {
 	Timeout    int
 }
 
+// KitNode represents a node in the kit tree. It can contain tools (leaf functions)
+// and children (nested namespaces).
+type KitNode struct {
+	Tools    map[string]ToolConfig
+	Children map[string]*KitNode
+}
+
 // Runner is the interface for executing tool implementations.
 // *envyr.Client satisfies this.
 type Runner interface {
@@ -29,10 +36,11 @@ type Runner interface {
 }
 
 type Engine struct {
-	KitRoot string
-	Refresh bool
-	lstate  *lua.LState
-	Runner  Runner
+	KitRoot  string
+	Refresh  bool
+	lstate   *lua.LState
+	Runner   Runner
+	Registry map[*lua.LFunction]ToolConfig
 }
 
 func (e *Engine) Close() {
@@ -62,7 +70,40 @@ func (e *Engine) RegisterHelpers() {
 	jsonTbl := e.lstate.NewTable()
 	e.lstate.SetField(jsonTbl, "encode", e.lstate.NewFunction(e.jsonEncode))
 	e.lstate.SetField(jsonTbl, "pretty", e.lstate.NewFunction(e.jsonEncodePretty))
+	e.lstate.SetField(jsonTbl, "decode", e.lstate.NewFunction(e.jsonDecode))
 	e.lstate.SetGlobal("json", jsonTbl)
+
+	// inspect
+	e.lstate.SetGlobal("inspect", e.lstate.NewFunction(e.inspect))
+}
+
+// ListTools walks the kit global and returns a tree of all registered tools.
+func (e *Engine) ListTools() *KitNode {
+	kit := e.lstate.GetGlobal("kit")
+	tbl, ok := kit.(*lua.LTable)
+	if !ok {
+		return &KitNode{}
+	}
+	return e.walkTable(tbl)
+}
+
+func (e *Engine) walkTable(tbl *lua.LTable) *KitNode {
+	node := &KitNode{
+		Tools:    make(map[string]ToolConfig),
+		Children: make(map[string]*KitNode),
+	}
+	tbl.ForEach(func(key, val lua.LValue) {
+		name := key.String()
+		switch v := val.(type) {
+		case *lua.LFunction:
+			if cfg, ok := e.Registry[v]; ok {
+				node.Tools[name] = cfg
+			}
+		case *lua.LTable:
+			node.Children[name] = e.walkTable(v)
+		}
+	})
+	return node
 }
 
 func (e *Engine) jsonEncode(L *lua.LState) int {
@@ -84,6 +125,22 @@ func (e *Engine) jsonEncodePretty(L *lua.LState) int {
 		L.RaiseError("Data Marshal Failure: %s", err.Error())
 	}
 	L.Push(lua.LString(string(data)))
+	return 1
+}
+
+func (e *Engine) jsonDecode(L *lua.LState) int {
+	str := L.CheckString(1)
+	var val any
+	if err := json.Unmarshal([]byte(str), &val); err != nil {
+		L.RaiseError("JSON Decode Failure: %s", err.Error())
+	}
+	L.Push(goToLua(L, val))
+	return 1
+}
+
+func (e *Engine) inspect(L *lua.LState) int {
+	val := L.CheckAny(1)
+	L.Push(lua.LString(formatLuaValue(val, "")))
 	return 1
 }
 
@@ -211,6 +268,7 @@ func (e *Engine) defineTool(L *lua.LState) int {
 		return 1
 	})
 
+	e.Registry[toolFn] = cfg
 	L.Push(toolFn)
 	return 1
 }
@@ -222,9 +280,10 @@ func NewEngine(kitRoot string) (*Engine, error) {
 	lState.SetField(pkg, "path", packagePath)
 
 	e := &Engine{
-		KitRoot: kitRoot,
-		lstate:  lState,
-		Runner:  envyr.NewDefaultClient(),
+		KitRoot:  kitRoot,
+		lstate:   lState,
+		Runner:   envyr.NewDefaultClient(),
+		Registry: make(map[*lua.LFunction]ToolConfig),
 	}
 	e.RegisterTools()
 	e.RegisterHelpers()
