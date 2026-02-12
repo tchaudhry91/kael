@@ -462,3 +462,183 @@ func TestListTools(t *testing.T) {
 		}
 	}
 }
+
+func TestSchemaParsing(t *testing.T) {
+	mock := &mockRunner{output: []byte(`{}`)}
+	e := newTestEngine(t, mock, map[string]string{
+		"init.lua": `
+			local M = {}
+			M.test = require("test")
+			return M
+		`,
+		"test.lua": `
+			return tools.define_tool({
+				source = "git@github.com:someone/repo.git",
+				schema = {
+					input = {
+						node = "string",
+						namespace = "string?",
+						limit = { type = "number", description = "max results" },
+						verbose = { type = "boolean", required = false, description = "enable verbose output" },
+					},
+					output = {
+						pods = "array",
+						count = "number",
+					},
+				},
+			})
+		`,
+	})
+	defer e.Close()
+
+	root := e.ListTools()
+	cfg := root.Tools["test"]
+	if cfg.Schema == nil {
+		t.Fatal("expected schema to be parsed")
+	}
+
+	// Input fields
+	if len(cfg.Schema.Input) != 4 {
+		t.Fatalf("expected 4 input fields, got %d", len(cfg.Schema.Input))
+	}
+
+	node := cfg.Schema.Input["node"]
+	if node.Type != "string" || !node.Required {
+		t.Errorf("node: got type=%q required=%v", node.Type, node.Required)
+	}
+
+	ns := cfg.Schema.Input["namespace"]
+	if ns.Type != "string" || ns.Required {
+		t.Errorf("namespace: got type=%q required=%v (want optional)", ns.Type, ns.Required)
+	}
+
+	limit := cfg.Schema.Input["limit"]
+	if limit.Type != "number" || !limit.Required || limit.Description != "max results" {
+		t.Errorf("limit: got type=%q required=%v desc=%q", limit.Type, limit.Required, limit.Description)
+	}
+
+	verbose := cfg.Schema.Input["verbose"]
+	if verbose.Type != "boolean" || verbose.Required || verbose.Description != "enable verbose output" {
+		t.Errorf("verbose: got type=%q required=%v desc=%q", verbose.Type, verbose.Required, verbose.Description)
+	}
+
+	// Output fields
+	if len(cfg.Schema.Output) != 2 {
+		t.Fatalf("expected 2 output fields, got %d", len(cfg.Schema.Output))
+	}
+	if cfg.Schema.Output["pods"].Type != "array" {
+		t.Errorf("pods output: got type=%q", cfg.Schema.Output["pods"].Type)
+	}
+	if cfg.Schema.Output["count"].Type != "number" {
+		t.Errorf("count output: got type=%q", cfg.Schema.Output["count"].Type)
+	}
+}
+
+func TestSchemaValidationRequiredField(t *testing.T) {
+	mock := &mockRunner{output: []byte(`{}`)}
+	e := newTestEngine(t, mock, map[string]string{
+		"init.lua": `
+			local M = {}
+			M.test = require("test")
+			return M
+		`,
+		"test.lua": `
+			return tools.define_tool({
+				source = "git@github.com:someone/repo.git",
+				schema = {
+					input = {
+						node = "string",
+						namespace = "string?",
+					},
+				},
+			})
+		`,
+	})
+	defer e.Close()
+
+	// Missing required "node" should fail
+	err := e.RunString(context.Background(), `
+		local ok, err = pcall(kit.test, { namespace = "default" })
+		assert(not ok, "expected pcall to fail")
+		assert(string.find(err, "Schema Validation Failure"), "expected schema error, got: " .. err)
+		assert(string.find(err, "node"), "expected field name in error, got: " .. err)
+	`)
+	if err != nil {
+		t.Fatalf("test failed: %v", err)
+	}
+
+	// Providing required "node" should pass
+	err = e.RunString(context.Background(), `kit.test({ node = "worker-1" })`)
+	if err != nil {
+		t.Fatalf("valid call failed: %v", err)
+	}
+}
+
+func TestSchemaValidationTypeCheck(t *testing.T) {
+	mock := &mockRunner{output: []byte(`{}`)}
+	e := newTestEngine(t, mock, map[string]string{
+		"init.lua": `
+			local M = {}
+			M.test = require("test")
+			return M
+		`,
+		"test.lua": `
+			return tools.define_tool({
+				source = "git@github.com:someone/repo.git",
+				schema = {
+					input = {
+						count = "number",
+						name = "string",
+					},
+				},
+			})
+		`,
+	})
+	defer e.Close()
+
+	// Wrong type: string instead of number
+	err := e.RunString(context.Background(), `
+		local ok, err = pcall(kit.test, { count = "not_a_number", name = "test" })
+		assert(not ok, "expected pcall to fail")
+		assert(string.find(err, "Schema Validation Failure"), "expected schema error, got: " .. err)
+		assert(string.find(err, "count"), "expected field name in error, got: " .. err)
+	`)
+	if err != nil {
+		t.Fatalf("type check test failed: %v", err)
+	}
+
+	// Correct types should pass
+	err = e.RunString(context.Background(), `kit.test({ count = 10, name = "test" })`)
+	if err != nil {
+		t.Fatalf("valid call failed: %v", err)
+	}
+}
+
+func TestNoSchemaStillWorks(t *testing.T) {
+	mock := &mockRunner{output: []byte(`{"ok": true}`)}
+	e := newTestEngine(t, mock, map[string]string{
+		"init.lua": `
+			local M = {}
+			M.test = require("test")
+			return M
+		`,
+		"test.lua": `
+			return tools.define_tool({
+				source = "git@github.com:someone/repo.git",
+			})
+		`,
+	})
+	defer e.Close()
+
+	// Any input should work without schema
+	err := e.RunString(context.Background(), `kit.test({ anything = "goes", count = 42 })`)
+	if err != nil {
+		t.Fatalf("call without schema failed: %v", err)
+	}
+
+	root := e.ListTools()
+	cfg := root.Tools["test"]
+	if cfg.Schema != nil {
+		t.Error("expected nil schema when none declared")
+	}
+}

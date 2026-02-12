@@ -17,6 +17,7 @@ type ToolConfig struct {
 	Executor   string
 	Tag        string // git tag, branch, or commit hash
 	Type       string // python, node, shell, other
+	Schema     *ToolSchema
 	Defaults   map[string]lua.LValue
 	Env        []string
 	Timeout    int
@@ -200,6 +201,8 @@ func (e *Engine) defineTool(L *lua.LState) int {
 		}
 	}
 
+	cfg.Schema = parseSchema(L, configTbl)
+
 	toolFn := L.NewFunction(func(L *lua.LState) int {
 		userParamsTbl := L.CheckTable(1)
 
@@ -214,6 +217,11 @@ func (e *Engine) defineTool(L *lua.LState) int {
 		userParamsTbl.ForEach(func(k, v lua.LValue) {
 			L.SetField(merged, k.String(), v)
 		})
+
+		if err := validateInput(L, cfg.Schema, merged); err != nil {
+			L.RaiseError("Schema Validation Failure: %s", err.Error())
+			return 0
+		}
 
 		// Map the config to envyr RunOptions
 		ro := envyr.RunOptions{
