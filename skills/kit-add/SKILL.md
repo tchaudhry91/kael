@@ -49,7 +49,7 @@ Determine if `$ARGUMENTS[0]` is a local path or a git URL. Then read the action 
 1. Clone the repo to a temporary directory: `git clone --depth 1 <url> /tmp/kael-skill-clone-$$`
 2. If the user specified a subdir or entrypoint, navigate to it. Otherwise inspect the repo to find the main script.
 3. Read and analyze the script from the clone to determine type, adapters, schema, and entrypoint.
-4. In the generated tool definition, set `source` to the **git URL** (NOT the local clone path). Envyr handles cloning at runtime.
+4. In the generated tool definition, set `source` to the **git URL** (NOT the local clone path). The kael runtime handles cloning at runtime.
 5. If the repo is a monorepo, set the `subdir` field to the relevant subdirectory.
 6. Set `tag` if the user specified a branch, tag, or commit.
 7. **Clean up**: After generating the tool definition, remove the temporary clone: `rm -rf /tmp/kael-skill-clone-$$`

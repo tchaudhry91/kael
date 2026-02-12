@@ -172,7 +172,7 @@ return tools.define_tool({
 })
 ```
 
-Note: `executor` is omitted because `docker` is the default. No `entrypoint` or `type` — envyr auto-detects them from the repo.
+Note: `executor` is omitted because `docker` is the default. No `entrypoint` or `type` — kael auto-detects them from the repo.
 
 ## Defaults factory pattern
 
