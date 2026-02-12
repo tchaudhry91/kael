@@ -1,3 +1,3 @@
 local M = {}
-M.fetch_html = require("misc.fetch_html")
+M.download = require("misc.download")
 return M
