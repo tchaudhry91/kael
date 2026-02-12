@@ -2,6 +2,7 @@ return tools.define_tool({
     source = "git@github.com:tchaudhry91/python-html-downloader.git",
     entrypoint = "download.py",
     type = "python",
+    deps = {"requests"},
     input_adapter = "json",
     output_adapter = "json",
     schema = {
@@ -9,7 +10,7 @@ return tools.define_tool({
             url = "string",
         },
         output = {
-            html = "string",
+            html_text = "string",
         },
     },
 })

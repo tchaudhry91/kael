@@ -33,6 +33,11 @@ Determine if `$ARGUMENTS[0]` is a local path or a git URL. Then read the action 
    - For node: look for `process.env.VAR`
    - Common ones: `KUBECONFIG`, `AWS_PROFILE`, `AWS_REGION`, `HOME`, `PATH`, `DOCKER_HOST`
    - If any are found, add them to the `env` field as an array of variable names
+8. **Dependencies**: What packages does the script need?
+   - For Python: look for `import` statements and `requirements.txt`. Add third-party packages (not stdlib) to the `deps` field.
+   - For Node: look for `require()` / `import` statements and `package.json`. Add non-builtin packages to `deps`.
+   - For bash/shell: look for commands used (`curl`, `jq`, `aws`, `kubectl`, etc.). Add the apk package names to `deps`.
+   - Only include `deps` if the source repo is missing a `requirements.txt` or `package.json`, OR if there are additional packages not listed there.
 
 ## Resolving the source
 

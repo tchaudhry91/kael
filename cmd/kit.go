@@ -183,6 +183,9 @@ func kitDescribe(kitPath, toolPath string) error {
 	if cfg.Timeout > 0 {
 		fmt.Printf("Timeout:    %ds\n", cfg.Timeout)
 	}
+	if len(cfg.Deps) > 0 {
+		fmt.Printf("Deps:       %s\n", strings.Join(cfg.Deps, ", "))
+	}
 	if len(cfg.Env) > 0 {
 		fmt.Printf("Env:        %s\n", strings.Join(cfg.Env, ", "))
 	}

@@ -101,6 +101,7 @@ The engine validates input against the schema before dispatching. Missing requir
 | Field | Type | Description |
 |-------|------|-------------|
 | `defaults` | table | Default values merged with user input. User values override defaults. |
+| `deps` | array of strings | Dependencies to install. For Python: pip packages. For Node: npm packages. For Shell: apk system packages. |
 | `env` | array of strings | Environment variable names to pass through to the executor. |
 
 ## Defaults pattern

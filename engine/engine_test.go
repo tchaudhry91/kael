@@ -8,19 +8,19 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/tchaudhry91/kael/envyr"
+	"github.com/tchaudhry91/kael/runtime"
 	"github.com/yuin/gopher-lua"
 )
 
 // mockRunner records the call and returns a canned response.
 type mockRunner struct {
-	lastOpts  envyr.RunOptions
+	lastOpts  runtime.RunOptions
 	lastInput []byte
 	output    []byte
 	err       error
 }
 
-func (m *mockRunner) Run(_ context.Context, opts envyr.RunOptions, input []byte) ([]byte, error) {
+func (m *mockRunner) Run(_ context.Context, opts runtime.RunOptions, input []byte) ([]byte, error) {
 	m.lastOpts = opts
 	m.lastInput = input
 	return m.output, m.err
@@ -108,7 +108,7 @@ func TestDefineToolConfigParsing(t *testing.T) {
 	if mock.lastOpts.SubDir != "scripts" {
 		t.Errorf("subdir: got %q", mock.lastOpts.SubDir)
 	}
-	if mock.lastOpts.Executor != envyr.ExecutorNative {
+	if mock.lastOpts.Executor != runtime.ExecutorNative {
 		t.Errorf("executor: got %q", mock.lastOpts.Executor)
 	}
 	if mock.lastOpts.Timeout != 30 {
@@ -116,9 +116,6 @@ func TestDefineToolConfigParsing(t *testing.T) {
 	}
 	if mock.lastOpts.Tag != "v1.2.0" {
 		t.Errorf("tag: got %q", mock.lastOpts.Tag)
-	}
-	if !mock.lastOpts.Autogen {
-		t.Error("autogen should be true")
 	}
 	if len(mock.lastOpts.EnvMap) != 2 || mock.lastOpts.EnvMap[0] != "AWS_PROFILE" || mock.lastOpts.EnvMap[1] != "HOME" {
 		t.Errorf("env: got %v", mock.lastOpts.EnvMap)
@@ -186,7 +183,7 @@ func TestDefineToolExecutorDefault(t *testing.T) {
 		t.Fatalf("tool call failed: %v", err)
 	}
 
-	if mock.lastOpts.Executor != envyr.ExecutorDocker {
+	if mock.lastOpts.Executor != runtime.ExecutorDocker {
 		t.Errorf("executor should default to docker, got %q", mock.lastOpts.Executor)
 	}
 }

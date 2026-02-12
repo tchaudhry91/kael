@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/tchaudhry91/kael/envyr"
+	"github.com/tchaudhry91/kael/runtime"
 	"github.com/yuin/gopher-lua"
 )
 
@@ -22,6 +22,7 @@ type ToolConfig struct {
 	InputAdapter string // "json" (default) or "args"
 	OutputAdapter string // "json" (default), "text", or "lines"
 	Defaults     map[string]lua.LValue
+	Deps         []string
 	Env          []string
 	Timeout      int
 }
@@ -34,9 +35,8 @@ type KitNode struct {
 }
 
 // Runner is the interface for executing tool implementations.
-// *envyr.Client satisfies this.
 type Runner interface {
-	Run(ctx context.Context, opts envyr.RunOptions, input []byte) ([]byte, error)
+	Run(ctx context.Context, opts runtime.RunOptions, input []byte) ([]byte, error)
 }
 
 type Engine struct {
@@ -186,6 +186,18 @@ func (e *Engine) defineTool(L *lua.LState) int {
 		}
 	}
 
+	if deps := L.GetField(configTbl, "deps"); deps != lua.LNil {
+		depsTbl, ok := deps.(*lua.LTable)
+		if ok {
+			cfg.Deps = make([]string, 0, depsTbl.Len())
+			depsTbl.ForEach(func(_, value lua.LValue) {
+				if value != lua.LNil {
+					cfg.Deps = append(cfg.Deps, value.String())
+				}
+			})
+		}
+	}
+
 	if env := L.GetField(configTbl, "env"); env != lua.LNil {
 		envTbl, ok := env.(*lua.LTable)
 		if ok {
@@ -233,33 +245,17 @@ func (e *Engine) defineTool(L *lua.LState) int {
 			return 0
 		}
 
-		// Map the config to envyr RunOptions
-		ro := envyr.RunOptions{
-			Source:  cfg.Source,
-			Autogen: true,
-			Refresh: e.Refresh,
-			EnvMap:  cfg.Env,
-			Timeout: cfg.Timeout,
-		}
-
-		if cfg.Entrypoint != "" {
-			ro.Entrypoint = cfg.Entrypoint
-		}
-
-		if cfg.SubDir != "" {
-			ro.SubDir = cfg.SubDir
-		}
-
-		if cfg.Executor != "" {
-			ro.Executor = envyr.Executor(cfg.Executor)
-		}
-
-		if cfg.Tag != "" {
-			ro.Tag = cfg.Tag
-		}
-
-		if cfg.Type != "" {
-			ro.Type = cfg.Type
+		ro := runtime.RunOptions{
+			Source:     cfg.Source,
+			Entrypoint: cfg.Entrypoint,
+			SubDir:     cfg.SubDir,
+			Executor:   cfg.Executor,
+			Tag:        cfg.Tag,
+			Type:       cfg.Type,
+			Refresh:    e.Refresh,
+			EnvMap:     cfg.Env,
+			Deps:       cfg.Deps,
+			Timeout:    cfg.Timeout,
 		}
 
 		inputB, extraArgs, err := adaptInput(cfg.InputAdapter, merged)
@@ -343,7 +339,7 @@ func NewEngine(kitRoot string) (*Engine, error) {
 	e := &Engine{
 		KitRoot:  kitRoot,
 		lstate:   lState,
-		Runner:   envyr.NewDefaultClient(),
+		Runner:   runtime.NewDefaultRunner(),
 		Registry: make(map[*lua.LFunction]ToolConfig),
 	}
 	e.RegisterTools()
