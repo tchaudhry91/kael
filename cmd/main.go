@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/peterbourgon/ff/v4"
 	"github.com/peterbourgon/ff/v4/ffhelp"
@@ -30,6 +31,12 @@ func main() {
 			newKitCmd(rootFlags, kitPath),
 		},
 		Exec: func(ctx context.Context, args []string) error {
+			if len(args) > 0 && strings.HasSuffix(args[0], ".lua") {
+				if err := bootstrap(); err != nil {
+					return fmt.Errorf("bootstrap: %w", err)
+				}
+				return runScript(ctx, *kitPath, false, args[0])
+			}
 			return fmt.Errorf("no subcommand provided")
 		},
 	}
