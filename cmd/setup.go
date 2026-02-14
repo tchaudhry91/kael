@@ -49,12 +49,24 @@ func runSetup() error {
 		fmt.Printf("kit already exists at %s\n", kitPath)
 	}
 
-	// 3. Install skills
+	// 3. Create default config if not exists
+	configPath := filepath.Join(home, ".kael", "config.yaml")
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		defaultConfig := fmt.Sprintf("# kael configuration\n# Values here are overridden by KAEL_ env vars and --flags\n\nkit: %s\n", kitPath)
+		if err := os.WriteFile(configPath, []byte(defaultConfig), 0644); err != nil {
+			return fmt.Errorf("create config: %w", err)
+		}
+		fmt.Printf("config created at %s\n", configPath)
+	} else {
+		fmt.Printf("config already exists at %s\n", configPath)
+	}
+
+	// 4. Install skills
 	if err := installSkills(home); err != nil {
 		return fmt.Errorf("install skills: %w", err)
 	}
 
-	// 4. Detect available AI tools
+	// 5. Detect available AI tools
 	fmt.Println()
 	detectAITools()
 
