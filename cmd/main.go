@@ -42,6 +42,7 @@ func init() {
 	rootCmd.AddCommand(newRunCmd())
 	rootCmd.AddCommand(newExecCmd())
 	rootCmd.AddCommand(newKitCmd())
+	rootCmd.AddCommand(newSetupCmd())
 }
 
 func initConfig() {
