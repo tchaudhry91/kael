@@ -8,9 +8,9 @@ import (
 	"strings"
 )
 
-// resolveSource resolves a source string to a local directory path.
+// ResolveSource resolves a source string to a local directory path.
 // For local paths, it canonicalizes. For git URLs, it clones/caches.
-func resolveSource(source, tag, subDir string, refresh bool) (string, error) {
+func ResolveSource(source, tag, subDir string, refresh bool) (string, error) {
 	if isGitURL(source) {
 		return resolveGitSource(source, tag, refresh, subDir)
 	}

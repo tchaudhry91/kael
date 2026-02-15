@@ -61,7 +61,7 @@ func newKitCmd() *cobra.Command {
 		},
 	}
 
-	kitCmd.AddCommand(listCmd, validateCmd, initCmd, describeCmd)
+	kitCmd.AddCommand(listCmd, validateCmd, initCmd, describeCmd, newKitAddCmd())
 	return kitCmd
 }
 

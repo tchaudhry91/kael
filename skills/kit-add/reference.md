@@ -39,8 +39,6 @@ return tools.define_tool({
 | `input_adapter` | string | `"args"` | How input is passed to the script. `"args"`: as CLI flags (`--key value`). `"json"`: as JSON on stdin. |
 | `output_adapter` | string | `"text"` | How output is interpreted. `"text"`: raw stdout wrapped as `{output: "..."}`. `"json"`: stdout parsed as JSON. `"lines"`: stdout split by newlines as `{lines: [...]}`. |
 
-**Important**: Only include adapter fields when they differ from the defaults. If a script uses CLI args for input and produces plain text, omit both adapter fields entirely.
-
 ### Input adapter details
 
 **`args` (default)**: The input Lua table is converted to CLI flags:
@@ -79,81 +77,13 @@ schema = {
 }
 ```
 
-**Long form**: A table with `type`, `description`, and optionally `required`.
-
-```lua
-schema = {
-    input = {
-        node = { type = "string", description = "target node name" },
-        limit = { type = "number", required = false, description = "max results" },
-    },
-}
-```
-
 Supported types: `"string"`, `"number"`, `"boolean"`, `"array"`, `"object"`.
 
-Fields default to required. Use `"type?"` shorthand or `required = false` for optional.
-
-The engine validates input against the schema before dispatching. Missing required fields or type mismatches raise a clear Lua error.
+Fields default to required. Use `"type?"` shorthand for optional.
 
 ### Other fields
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `defaults` | table | Default values merged with user input. User values override defaults. |
 | `deps` | array of strings | Dependencies to install. For Python: pip packages. For Node: npm packages. For Shell: apk system packages. |
 | `env` | array of strings | Environment variable names to pass through to the executor. |
-
-## Defaults pattern
-
-For tools sharing common config (same source, executor, etc.), use a defaults factory:
-
-```lua
--- namespace/defaults.lua
-return function()
-    return {
-        source = "/path/to/actions/namespace",
-        executor = "native",
-        input_adapter = "json",
-        output_adapter = "json",
-    }
-end
-```
-
-Then each tool inherits and extends:
-
-```lua
--- namespace/my_tool.lua
-local base = require("namespace.defaults")()
-base.entrypoint = "my_tool.py"
-base.type = "python"
-base.schema = { ... }
-return tools.define_tool(base)
-```
-
-This is optional — only use it when multiple tools share the same source and executor.
-
-## init.lua wiring
-
-Each namespace has an `init.lua` that requires its tools:
-
-```lua
--- namespace/init.lua
-local M = {}
-M.my_tool = require("namespace.my_tool")
-M.other_tool = require("namespace.other_tool")
-return M
-```
-
-The top-level `init.lua` requires namespaces:
-
-```lua
--- init.lua
-local M = {}
-M.namespace = require("namespace")
-return M
-```
-
-Tools are then called as `kit.namespace.my_tool({ ... })` in Lua scripts.
-
-When adding a tool, insert a new `M.<name> = require("<namespace>.<name>")` line before the `return M` in the namespace's `init.lua`. Check that the line doesn't already exist before adding it.

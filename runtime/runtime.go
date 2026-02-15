@@ -62,7 +62,7 @@ func (r *DefaultRunner) Run(ctx context.Context, opts RunOptions, input []byte) 
 	}
 
 	// Resolve source to a local path
-	sourcePath, err := resolveSource(opts.Source, opts.Tag, opts.SubDir, opts.Refresh)
+	sourcePath, err := ResolveSource(opts.Source, opts.Tag, opts.SubDir, opts.Refresh)
 	if err != nil {
 		return nil, fmt.Errorf("resolve source: %w", err)
 	}
