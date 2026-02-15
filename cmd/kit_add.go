@@ -25,8 +25,8 @@ type toolAnalysis struct {
 }
 
 type toolAnalysisSchema struct {
-	Input  map[string]string `json:"input,omitempty"`
-	Output map[string]string `json:"output,omitempty"`
+	Input  map[string]interface{} `json:"input,omitempty"`
+	Output map[string]interface{} `json:"output,omitempty"`
 }
 
 func newKitAddCmd() *cobra.Command {
@@ -214,8 +214,8 @@ func skeletonAnalysis(entrypoint string) toolAnalysis {
 		Type:       t,
 		Entrypoint: entrypoint,
 		Schema: &toolAnalysisSchema{
-			Input:  map[string]string{"param": "string"},
-			Output: map[string]string{"output": "string"},
+			Input:  map[string]interface{}{"param": "string"},
+			Output: map[string]interface{}{"output": "string"},
 		},
 	}
 }
@@ -281,6 +281,22 @@ func extractJSON(s string) string {
 	return ""
 }
 
+// flattenType converts a schema value to a flat type string.
+// If the value is already a string, it's returned as-is.
+// Arrays become "object[]", maps become "object".
+func flattenType(v interface{}) string {
+	switch v := v.(type) {
+	case string:
+		return v
+	case []interface{}:
+		return "object[]"
+	case map[string]interface{}:
+		return "object"
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
+
 // generateLua produces the Lua tool definition from the analysis.
 func generateLua(source string, a toolAnalysis) string {
 	var b strings.Builder
@@ -317,14 +333,14 @@ func generateLua(source string, a toolAnalysis) string {
 		if len(a.Schema.Input) > 0 {
 			b.WriteString("        input = {\n")
 			for k, v := range a.Schema.Input {
-				b.WriteString(fmt.Sprintf("            %s = %q,\n", k, v))
+				b.WriteString(fmt.Sprintf("            %s = %q,\n", k, flattenType(v)))
 			}
 			b.WriteString("        },\n")
 		}
 		if len(a.Schema.Output) > 0 {
 			b.WriteString("        output = {\n")
 			for k, v := range a.Schema.Output {
-				b.WriteString(fmt.Sprintf("            %s = %q,\n", k, v))
+				b.WriteString(fmt.Sprintf("            %s = %q,\n", k, flattenType(v)))
 			}
 			b.WriteString("        },\n")
 		}

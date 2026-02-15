@@ -25,10 +25,13 @@ You are analyzing a script to produce a JSON tool definition. The user provides 
    - `json.dump()`, pipes through `jq` → `"json"`
    - `print()`, `echo` for plain text → omit (text is the default)
    - One item per line → `"lines"`
-5. **schema**: Input and output field types
+5. **schema**: Input and output field types as FLAT type strings
    - For input: read argument names, JSON keys accessed from parsed input
    - For output: read what gets written to stdout
-   - Use `"string?"`, `"number?"` for optional fields
+   - Every value MUST be a simple type string: `"string"`, `"number"`, `"boolean"`, `"object"`, `"string[]"`, `"object[]"`
+   - Append `?` for optional: `"string?"`, `"number?"`
+   - NEVER use nested objects or arrays as values — always use flat type strings
+   - Example: `{"input":{"urls":"string[]","timeout":"number?"},"output":{"results":"object[]"}}`
 6. **deps**: Third-party packages the script needs
    - Python: look for `import` statements, match against stdlib. Add non-stdlib packages.
    - Node: look for `require()` / `import` of non-builtin modules
@@ -44,14 +47,15 @@ You are analyzing a script to produce a JSON tool definition. The user provides 
 
 Output ONLY this JSON object, nothing else:
 
-{"type":"python","entrypoint":"script.py","input_adapter":"json","output_adapter":"json","schema":{"input":{"field":"type"},"output":{"field":"type"}},"deps":["requests"],"env":["KUBECONFIG"]}
+{"type":"python","entrypoint":"script.py","input_adapter":"json","output_adapter":"json","schema":{"input":{"urls":"string[]","timeout":"number?"},"output":{"results":"object[]"}},"deps":["requests"],"env":["KUBECONFIG"]}
 
 Rules:
 - Omit `input_adapter` if it would be `"args"`
 - Omit `output_adapter` if it would be `"text"`
-- Omit `deps` if empty
-- Omit `env` if empty
+- Omit `deps` if empty — `deps` is a TOP-LEVEL field, NOT inside `schema`
+- Omit `env` if empty — `env` is a TOP-LEVEL field, NOT inside `schema`
 - Always include `type`, `entrypoint`, and `schema`
+- All schema values MUST be flat type strings (`"string"`, `"number?"`, `"object[]"`, etc.) — never nested objects or arrays
 - Output raw JSON only — no markdown, no code fences, no explanation
 
 For reference on kael's define_tool API and adapter details, see [reference.md](reference.md).
