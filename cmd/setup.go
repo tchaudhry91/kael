@@ -29,11 +29,9 @@ func runSetup() error {
 		return err
 	}
 
-	// Detect available tools
+	// Detect available AI tools
 	hasClaudeCode, _ := exec.LookPath("claude")
 	hasOpenCode, _ := exec.LookPath("opencode")
-	hasDocker, _ := exec.LookPath("docker")
-	hasPodman, _ := exec.LookPath("podman")
 
 	// Build AI tool options
 	aiOptions := []huh.Option[string]{}
@@ -45,21 +43,6 @@ func runSetup() error {
 	}
 	aiOptions = append(aiOptions, huh.NewOption[string]("None (manual only)", "none"))
 
-	// Build container runtime options
-	runtimeOptions := []huh.Option[string]{}
-	if hasDocker != "" {
-		runtimeOptions = append(runtimeOptions, huh.NewOption[string]("docker", "docker"))
-	}
-	if hasPodman != "" {
-		runtimeOptions = append(runtimeOptions, huh.NewOption[string]("podman", "podman"))
-	}
-	if len(runtimeOptions) == 0 {
-		runtimeOptions = append(runtimeOptions,
-			huh.NewOption[string]("docker (not found)", "docker"),
-			huh.NewOption[string]("podman (not found)", "podman"),
-		)
-	}
-
 	// Form values with defaults
 	kitPath := filepath.Join(home, ".kael", "kit")
 	aiTool := "none"
@@ -67,10 +50,6 @@ func runSetup() error {
 		aiTool = "claude"
 	} else if hasOpenCode != "" {
 		aiTool = "opencode"
-	}
-	containerRuntime := "docker"
-	if hasDocker == "" && hasPodman != "" {
-		containerRuntime = "podman"
 	}
 	skillDir := filepath.Join(home, ".claude", "skills")
 
@@ -93,19 +72,13 @@ func runSetup() error {
 		).Title("AI Integration").
 			WithHideFunc(func() bool { return aiTool == "none" }),
 
-		// Group 3: Kit & execution
+		// Group 3: Kit path
 		huh.NewGroup(
 			huh.NewInput().
 				Title("Kit path").
 				Description("Where tool definitions live").
 				Value(&kitPath),
-
-			huh.NewSelect[string]().
-				Title("Container runtime").
-				Description("Used for sandboxed tool execution").
-				Options(runtimeOptions...).
-				Value(&containerRuntime),
-		).Title("Kit & Execution"),
+		).Title("Kit"),
 	)
 
 	if err := form.Run(); err != nil {
@@ -147,8 +120,7 @@ func runSetup() error {
 # Values here are overridden by KAEL_ env vars and --flags
 
 kit: %s
-container_runtime: %s
-`, kitPath, containerRuntime)
+`, kitPath)
 
 	if aiTool != "none" {
 		config += fmt.Sprintf(`
