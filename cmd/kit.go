@@ -61,7 +61,16 @@ func newKitCmd() *cobra.Command {
 		},
 	}
 
-	kitCmd.AddCommand(listCmd, validateCmd, initCmd, describeCmd, newKitAddCmd())
+	removeCmd := &cobra.Command{
+		Use:   "remove <tool.path>",
+		Short: "Remove a tool from the kit",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return kitRemove(viper.GetString("kit"), args[0])
+		},
+	}
+
+	kitCmd.AddCommand(listCmd, validateCmd, initCmd, describeCmd, newKitAddCmd(), removeCmd)
 	return kitCmd
 }
 
@@ -276,6 +285,70 @@ func kitInit(kitPath, namespace string) error {
 	leafDir := filepath.Join(append([]string{kitPath}, parts...)...)
 	fmt.Printf("namespace %q ready at %s\n", namespace, leafDir)
 	return nil
+}
+
+func kitRemove(kitPath, toolPath string) error {
+	// 1. Verify the tool exists
+	e, err := engine.NewEngine(kitPath)
+	if err != nil {
+		return fmt.Errorf("kit load: %w", err)
+	}
+	defer e.Close()
+
+	root := e.ListTools()
+	if _, err := resolveTool(root, toolPath); err != nil {
+		return err
+	}
+
+	// 2. Split path into namespace parts + tool name
+	parts := strings.Split(toolPath, ".")
+	toolName := parts[len(parts)-1]
+	nsParts := parts[:len(parts)-1]
+
+	// 3. Delete the Lua file
+	luaFile := filepath.Join(append(append([]string{kitPath}, nsParts...), toolName+".lua")...)
+	if err := os.Remove(luaFile); err != nil {
+		return fmt.Errorf("remove %s: %w", luaFile, err)
+	}
+	fmt.Printf("removed %s\n", luaFile)
+
+	// 4. Remove require line from parent init.lua
+	var parentInit string
+	if len(nsParts) == 0 {
+		parentInit = filepath.Join(kitPath, "init.lua")
+	} else {
+		parentInit = filepath.Join(append(append([]string{kitPath}, nsParts...), "init.lua")...)
+	}
+
+	requirePath := toolPath
+	if err := unwireNamespace(parentInit, toolName, requirePath); err != nil {
+		return fmt.Errorf("unwire namespace: %w", err)
+	}
+	fmt.Printf("unwired %s from %s\n", toolName, parentInit)
+
+	// 5. Validate
+	if err := kitValidate(kitPath); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: kit validation failed: %v\n", err)
+	}
+
+	return nil
+}
+
+// unwireNamespace removes M.<name> = require("<requirePath>") from an init.lua file.
+func unwireNamespace(initPath, name, requirePath string) error {
+	data, err := os.ReadFile(initPath)
+	if err != nil {
+		return err
+	}
+
+	requireLine := fmt.Sprintf("M.%s = require(\"%s\")\n", name, requirePath)
+	content := string(data)
+	newContent := strings.Replace(content, requireLine, "", 1)
+	if newContent == content {
+		return fmt.Errorf("could not find require line for %q in %s", name, initPath)
+	}
+
+	return os.WriteFile(initPath, []byte(newContent), 0644)
 }
 
 // wireNamespace adds M.<name> = require("<requirePath>") to an init.lua file
