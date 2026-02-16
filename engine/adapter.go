@@ -10,8 +10,9 @@ import (
 
 // Input adapter types
 const (
-	InputAdapterJSON = "json" // default: serialize to JSON on stdin
-	InputAdapterArgs = "args" // convert table to --key value CLI flags
+	InputAdapterJSON           = "json"            // default: serialize to JSON on stdin
+	InputAdapterArgs           = "args"            // convert table to --key value CLI flags
+	InputAdapterPositionalArgs = "positional_args" // emit values as positional args in args_order
 )
 
 // Output adapter types
@@ -23,7 +24,7 @@ const (
 
 // adaptInput converts a merged Lua table into stdin bytes and optional extra args,
 // based on the input adapter type.
-func adaptInput(inputAdapter string, merged *lua.LTable) (stdinBytes []byte, extraArgs []string, err error) {
+func adaptInput(inputAdapter string, merged *lua.LTable, argsOrder []string) (stdinBytes []byte, extraArgs []string, err error) {
 	switch inputAdapter {
 	case InputAdapterJSON:
 		input := luaToGo(merged)
@@ -32,6 +33,8 @@ func adaptInput(inputAdapter string, merged *lua.LTable) (stdinBytes []byte, ext
 			return nil, nil, fmt.Errorf("Data Marshal Failure: %s", err.Error())
 		}
 		return data, nil, nil
+	case InputAdapterPositionalArgs:
+		return positionalFromTable(merged, argsOrder)
 	default: // args
 		return argsFromTable(merged)
 	}
@@ -60,6 +63,58 @@ func argsFromTable(tbl *lua.LTable) (stdinBytes []byte, extraArgs []string, err 
 			})
 		}
 	})
+	return nil, args, nil
+}
+
+// positionalFromTable emits values as positional arguments in the order specified by argsOrder.
+// Keys listed in argsOrder are emitted as bare values (no --prefix).
+// Any remaining keys not in argsOrder are appended as --key value flags.
+func positionalFromTable(tbl *lua.LTable, argsOrder []string) (stdinBytes []byte, extraArgs []string, err error) {
+	var args []string
+
+	// Track which keys are consumed by positional ordering
+	consumed := make(map[string]bool, len(argsOrder))
+
+	// Emit positional args first, in order
+	for _, key := range argsOrder {
+		consumed[key] = true
+		val := tbl.RawGetString(key)
+		if val == lua.LNil {
+			continue
+		}
+		switch v := val.(type) {
+		case lua.LNumber:
+			args = append(args, fmt.Sprintf("%g", float64(v)))
+		case lua.LString:
+			args = append(args, string(v))
+		default:
+			args = append(args, val.String())
+		}
+	}
+
+	// Append remaining keys as --key value flags
+	tbl.ForEach(func(key, val lua.LValue) {
+		name := key.String()
+		if consumed[name] {
+			return
+		}
+		flag := "--" + name
+		switch v := val.(type) {
+		case lua.LBool:
+			if bool(v) {
+				args = append(args, flag)
+			}
+		case lua.LNumber:
+			args = append(args, flag, fmt.Sprintf("%g", float64(v)))
+		case lua.LString:
+			args = append(args, flag, string(v))
+		case *lua.LTable:
+			v.ForEach(func(_, item lua.LValue) {
+				args = append(args, flag, item.String())
+			})
+		}
+	})
+
 	return nil, args, nil
 }
 

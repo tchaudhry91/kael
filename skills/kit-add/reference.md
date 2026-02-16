@@ -36,8 +36,9 @@ return tools.define_tool({
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `input_adapter` | string | `"args"` | How input is passed to the script. `"args"`: as CLI flags (`--key value`). `"json"`: as JSON on stdin. |
+| `input_adapter` | string | `"args"` | How input is passed to the script. `"args"`: as CLI flags (`--key value`). `"json"`: as JSON on stdin. `"positional_args"`: as positional arguments in `args_order`. |
 | `output_adapter` | string | `"text"` | How output is interpreted. `"text"`: raw stdout wrapped as `{output: "..."}`. `"json"`: stdout parsed as JSON. `"lines"`: stdout split by newlines as `{lines: [...]}`. |
+| `args_order` | array of strings | — | Required when `input_adapter` is `"positional_args"`. Specifies the order in which input fields are passed as positional arguments. |
 
 ### Input adapter details
 
@@ -48,6 +49,30 @@ return tools.define_tool({
 - No data is sent on stdin
 
 **`json`**: The input Lua table is serialized as JSON and sent on stdin. Nothing is passed as CLI args.
+
+**`positional_args`**: The input Lua table values are passed as positional arguments (no `--` prefix), in the order defined by `args_order`. Any input fields not listed in `args_order` are appended as `--key value` flags after the positional arguments.
+
+Example:
+```lua
+return tools.define_tool({
+    source = "/path/to/scripts",
+    entrypoint = "lookup.sh",
+    type = "shell",
+    input_adapter = "positional_args",
+    args_order = {"tenant_name", "region"},
+    schema = {
+        input = {
+            tenant_name = "string",
+            region = "string?",
+        },
+    },
+})
+```
+
+Calling `kit.lookup({ tenant_name = "acme", region = "us-east-1" })` runs:
+```
+lookup.sh acme us-east-1
+```
 
 ### Output adapter details
 
@@ -87,3 +112,7 @@ Fields default to required. Use `"type?"` shorthand for optional.
 |-------|------|-------------|
 | `deps` | array of strings | Dependencies to install. For Python: pip packages. For Node: npm packages. For Shell: apk system packages. |
 | `env` | array of strings | Environment variable names to pass through to the executor. |
+
+### Naming convention
+
+Always use underscores (`_`) in field names, never hyphens (`-`). For example: `tenant_name`, `from_time`, `resource_group`.

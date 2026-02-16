@@ -17,8 +17,10 @@ import (
 type toolAnalysis struct {
 	Type          string                       `json:"type"`
 	Entrypoint    string                       `json:"entrypoint"`
+	Executor      string                       `json:"executor,omitempty"`
 	InputAdapter  string                       `json:"input_adapter,omitempty"`
 	OutputAdapter string                       `json:"output_adapter,omitempty"`
+	ArgsOrder     []string                     `json:"args_order,omitempty"`
 	Schema        *toolAnalysisSchema          `json:"schema,omitempty"`
 	Deps          []string                     `json:"deps,omitempty"`
 	Env           []string                     `json:"env,omitempty"`
@@ -41,16 +43,18 @@ to skip AI and generate a skeleton definition.`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			manual, _ := cmd.Flags().GetBool("manual")
-			return kitAdd(args[0], args[1], manual)
+			extraPrompt, _ := cmd.Flags().GetString("prompt")
+			return kitAdd(args[0], args[1], manual, extraPrompt)
 		},
 	}
 
 	cmd.Flags().Bool("manual", false, "skip AI analysis, generate skeleton definition")
+	cmd.Flags().String("prompt", "", "additional instructions for the AI analysis")
 
 	return cmd
 }
 
-func kitAdd(source, namespace string, manual bool) error {
+func kitAdd(source, namespace string, manual bool, extraPrompt string) error {
 	kitPath := viper.GetString("kit")
 
 	// 1. Validate namespace exists
@@ -82,7 +86,7 @@ func kitAdd(source, namespace string, manual bool) error {
 	if manual {
 		analysis = skeletonAnalysis(entrypoint)
 	} else {
-		a, err := aiAnalysis(scriptPath)
+		a, err := aiAnalysis(scriptPath, extraPrompt)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "AI analysis failed: %v\nfalling back to skeleton\n", err)
 			analysis = skeletonAnalysis(entrypoint)
@@ -220,7 +224,7 @@ func skeletonAnalysis(entrypoint string) toolAnalysis {
 	}
 }
 
-func aiAnalysis(scriptPath string) (toolAnalysis, error) {
+func aiAnalysis(scriptPath string, extraPrompt string) (toolAnalysis, error) {
 	aiCommand := viper.GetString("ai.command")
 	if aiCommand == "" {
 		return toolAnalysis{}, fmt.Errorf("no AI tool configured — run kael setup or use --manual")
@@ -228,6 +232,9 @@ func aiAnalysis(scriptPath string) (toolAnalysis, error) {
 
 	// Build the prompt
 	prompt := fmt.Sprintf("/kit-add %s", scriptPath)
+	if extraPrompt != "" {
+		prompt += "\n\nAdditional instructions: " + extraPrompt
+	}
 
 	// Split command (e.g. "claude -p" → ["claude", "-p"])
 	parts := strings.Fields(aiCommand)
@@ -305,6 +312,10 @@ func generateLua(source string, a toolAnalysis) string {
 	b.WriteString(fmt.Sprintf("    entrypoint = %q,\n", a.Entrypoint))
 	b.WriteString(fmt.Sprintf("    type = %q,\n", a.Type))
 
+	if a.Executor != "" && a.Executor != "docker" {
+		b.WriteString(fmt.Sprintf("    executor = %q,\n", a.Executor))
+	}
+
 	if len(a.Deps) > 0 {
 		quoted := make([]string, len(a.Deps))
 		for i, d := range a.Deps {
@@ -315,6 +326,13 @@ func generateLua(source string, a toolAnalysis) string {
 
 	if a.InputAdapter != "" && a.InputAdapter != "args" {
 		b.WriteString(fmt.Sprintf("    input_adapter = %q,\n", a.InputAdapter))
+	}
+	if len(a.ArgsOrder) > 0 {
+		quoted := make([]string, len(a.ArgsOrder))
+		for i, f := range a.ArgsOrder {
+			quoted[i] = fmt.Sprintf("%q", f)
+		}
+		b.WriteString(fmt.Sprintf("    args_order = {%s},\n", strings.Join(quoted, ", ")))
 	}
 	if a.OutputAdapter != "" && a.OutputAdapter != "text" {
 		b.WriteString(fmt.Sprintf("    output_adapter = %q,\n", a.OutputAdapter))

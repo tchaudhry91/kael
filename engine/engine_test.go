@@ -828,6 +828,97 @@ func TestDefaultAdaptersArgsAndText(t *testing.T) {
 	}
 }
 
+func TestInputAdapterPositionalArgs(t *testing.T) {
+	mock := &mockRunner{output: []byte(`{}`)}
+	e := newTestEngine(t, mock, map[string]string{
+		"init.lua": `
+			local M = {}
+			M.test = require("test")
+			return M
+		`,
+		"test.lua": `
+			return tools.define_tool({
+				source = "git@github.com:someone/repo.git",
+				input_adapter = "positional_args",
+				args_order = {"tenant_name", "region"},
+			})
+		`,
+	})
+	defer e.Close()
+
+	err := e.RunString(context.Background(), `kit.test({ tenant_name = "acme", region = "us-east-1" })`)
+	if err != nil {
+		t.Fatalf("tool call failed: %v", err)
+	}
+
+	// stdin should be empty for positional_args adapter
+	if len(mock.lastInput) > 0 {
+		t.Errorf("expected empty stdin, got %q", mock.lastInput)
+	}
+
+	args := mock.lastOpts.ExtraArgs
+	if len(args) < 2 {
+		t.Fatalf("expected at least 2 positional args, got %v", args)
+	}
+
+	// Positional args should be bare values in order, no -- prefix
+	if args[0] != "acme" {
+		t.Errorf("expected first positional arg 'acme', got %q", args[0])
+	}
+	if args[1] != "us-east-1" {
+		t.Errorf("expected second positional arg 'us-east-1', got %q", args[1])
+	}
+
+	// Should not contain --tenant_name or --region flags
+	for _, a := range args {
+		if a == "--tenant_name" || a == "--region" {
+			t.Errorf("positional_args should not produce flags, got %v", args)
+		}
+	}
+}
+
+func TestInputAdapterPositionalArgsWithExtraFlags(t *testing.T) {
+	mock := &mockRunner{output: []byte(`{}`)}
+	e := newTestEngine(t, mock, map[string]string{
+		"init.lua": `
+			local M = {}
+			M.test = require("test")
+			return M
+		`,
+		"test.lua": `
+			return tools.define_tool({
+				source = "git@github.com:someone/repo.git",
+				input_adapter = "positional_args",
+				args_order = {"tenant_name"},
+			})
+		`,
+	})
+	defer e.Close()
+
+	err := e.RunString(context.Background(), `kit.test({ tenant_name = "acme", verbose = true })`)
+	if err != nil {
+		t.Fatalf("tool call failed: %v", err)
+	}
+
+	args := mock.lastOpts.ExtraArgs
+
+	// First arg should be the positional value
+	if len(args) == 0 || args[0] != "acme" {
+		t.Fatalf("expected first positional arg 'acme', got %v", args)
+	}
+
+	// Extra key 'verbose' should appear as a flag after the positional arg
+	found := false
+	for _, a := range args[1:] {
+		if a == "--verbose" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected --verbose flag for extra key, got %v", args)
+	}
+}
+
 // containsFlag checks if args contains --key followed by value.
 func containsFlag(args []string, key, value string) bool {
 	for i := 0; i < len(args)-1; i++ {

@@ -18,9 +18,10 @@ type ToolConfig struct {
 	Executor   string
 	Tag        string // git tag, branch, or commit hash
 	Type       string // python, node, shell, other
-	Schema       *ToolSchema
-	InputAdapter string // "json" (default) or "args"
-	OutputAdapter string // "json" (default), "text", or "lines"
+	Schema        *ToolSchema
+	InputAdapter  string   // "json" (default), "args", or "positional_args"
+	OutputAdapter string   // "json" (default), "text", or "lines"
+	ArgsOrder     []string // ordered field names for positional_args adapter
 	Defaults     map[string]lua.LValue
 	Deps         []string
 	Env          []string
@@ -222,6 +223,13 @@ func (e *Engine) defineTool(L *lua.LState) int {
 	if oa := L.GetField(configTbl, "output_adapter"); oa != lua.LNil {
 		cfg.OutputAdapter = oa.String()
 	}
+	if ao := L.GetField(configTbl, "args_order"); ao != lua.LNil {
+		if orderTbl, ok := ao.(*lua.LTable); ok {
+			orderTbl.ForEach(func(_, val lua.LValue) {
+				cfg.ArgsOrder = append(cfg.ArgsOrder, val.String())
+			})
+		}
+	}
 
 	cfg.Schema = parseSchema(L, configTbl)
 
@@ -258,7 +266,7 @@ func (e *Engine) defineTool(L *lua.LState) int {
 			Timeout:    cfg.Timeout,
 		}
 
-		inputB, extraArgs, err := adaptInput(cfg.InputAdapter, merged)
+		inputB, extraArgs, err := adaptInput(cfg.InputAdapter, merged, cfg.ArgsOrder)
 		if err != nil {
 			L.RaiseError("%s", err.Error())
 			return 0
