@@ -11,9 +11,6 @@ import (
 	"time"
 )
 
-// dockerExecutor handles building and running containers via docker or podman.
-type dockerExecutor struct{}
-
 // detectContainerRuntime finds docker or podman on PATH.
 func detectContainerRuntime() (string, error) {
 	if path, err := exec.LookPath("docker"); err == nil {
@@ -165,8 +162,12 @@ func dockerRun(ctx context.Context, runtime, sourcePath string, opts RunOptions,
 	}
 
 	if err != nil {
+		exitCode := -1
+		if cmd.ProcessState != nil {
+			exitCode = cmd.ProcessState.ExitCode()
+		}
 		return nil, &RunError{
-			ExitCode: cmd.ProcessState.ExitCode(),
+			ExitCode: exitCode,
 			Stderr:   stderr.String(),
 		}
 	}

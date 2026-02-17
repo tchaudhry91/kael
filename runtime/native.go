@@ -58,8 +58,12 @@ func nativeRun(ctx context.Context, sourcePath string, opts RunOptions, input []
 	}
 
 	if err != nil {
+		exitCode := -1
+		if cmd.ProcessState != nil {
+			exitCode = cmd.ProcessState.ExitCode()
+		}
 		return nil, &RunError{
-			ExitCode: cmd.ProcessState.ExitCode(),
+			ExitCode: exitCode,
 			Stderr:   stderr.String(),
 		}
 	}

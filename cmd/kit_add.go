@@ -135,7 +135,7 @@ func kitAdd(source, namespace string, manual bool, extraPrompt string) error {
 // For local paths, it returns the absolute path for both.
 // If source is a file (not a directory), entrypoint is set to the filename.
 func resolveAddSource(source string) (string, string, string, error) {
-	if isGitSource(source) {
+	if runtime.IsGitURL(source) {
 		localPath, err := runtime.ResolveSource(source, "", "", false)
 		if err != nil {
 			return "", "", "", err
@@ -159,14 +159,6 @@ func resolveAddSource(source string) (string, string, string, error) {
 	return absPath, absPath, "", nil
 }
 
-func isGitSource(source string) bool {
-	return strings.HasPrefix(source, "git@") ||
-		strings.HasPrefix(source, "https://github.com") ||
-		strings.HasPrefix(source, "https://gitlab.com") ||
-		strings.HasPrefix(source, "https://bitbucket.org") ||
-		strings.HasSuffix(source, ".git")
-}
-
 // findEntrypoint looks for a single script file in the directory.
 // If multiple exist, returns an error asking the user to specify.
 func findEntrypoint(dir string) (string, error) {
@@ -188,7 +180,7 @@ func findEntrypoint(dir string) (string, error) {
 	}
 
 	if len(scripts) == 0 {
-		return "", fmt.Errorf("no script files (.py, .sh, .js) found in %s", dir)
+		return "", fmt.Errorf("no script files (.py, .sh, .js, .ts) found in %s", dir)
 	}
 	if len(scripts) == 1 {
 		return scripts[0], nil

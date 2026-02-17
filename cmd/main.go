@@ -23,7 +23,7 @@ var rootCmd = &cobra.Command{
 			if err := bootstrap(); err != nil {
 				return fmt.Errorf("bootstrap: %w", err)
 			}
-			return runScript(cmd.Context(), viper.GetString("kit"), false, args[0])
+			return runScript(cmd.Context(), viper.GetString("kit"), viper.GetBool("refresh"), args[0])
 		}
 		return cmd.Help()
 	},

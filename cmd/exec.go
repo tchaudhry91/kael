@@ -25,7 +25,8 @@ func newExecCmd() *cobra.Command {
 			}
 			toolPath := args[0]
 			toolArgs := args[1:]
-			return execTool(cmd.Context(), viper.GetString("kit"), viper.GetBool("refresh"), toolPath, toolArgs)
+			refresh, _ := cmd.Flags().GetBool("refresh")
+			return execTool(cmd.Context(), viper.GetString("kit"), refresh, toolPath, toolArgs)
 		},
 	}
 
@@ -34,7 +35,6 @@ func newExecCmd() *cobra.Command {
 	cmd.Flags().SetInterspersed(false)
 
 	cmd.Flags().Bool("refresh", false, "force re-fetch of tool sources")
-	viper.BindPFlag("refresh", cmd.Flags().Lookup("refresh"))
 
 	return cmd
 }

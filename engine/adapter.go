@@ -35,8 +35,10 @@ func adaptInput(inputAdapter string, merged *lua.LTable, argsOrder []string) (st
 		return data, nil, nil
 	case InputAdapterPositionalArgs:
 		return positionalFromTable(merged, argsOrder)
-	default: // args
+	case InputAdapterArgs, "":
 		return argsFromTable(merged)
+	default:
+		return nil, nil, fmt.Errorf("unknown input_adapter: %q", inputAdapter)
 	}
 }
 
@@ -137,7 +139,9 @@ func adaptOutput(outputAdapter string, outputB []byte) (any, error) {
 			}
 		}
 		return map[string]any{"lines": lines}, nil
-	default: // text
+	case OutputAdapterText, "":
 		return map[string]any{"output": string(outputB)}, nil
+	default:
+		return nil, fmt.Errorf("unknown output_adapter: %q", outputAdapter)
 	}
 }

@@ -11,14 +11,14 @@ import (
 // ResolveSource resolves a source string to a local directory path.
 // For local paths, it canonicalizes. For git URLs, it clones/caches.
 func ResolveSource(source, tag, subDir string, refresh bool) (string, error) {
-	if isGitURL(source) {
+	if IsGitURL(source) {
 		return resolveGitSource(source, tag, refresh, subDir)
 	}
 	return resolveLocalSource(source, subDir)
 }
 
-// isGitURL returns true if the source looks like a git URL.
-func isGitURL(source string) bool {
+// IsGitURL returns true if the source looks like a git URL.
+func IsGitURL(source string) bool {
 	return strings.HasPrefix(source, "git@") ||
 		strings.HasPrefix(source, "https://github.com") ||
 		strings.HasPrefix(source, "https://gitlab.com") ||

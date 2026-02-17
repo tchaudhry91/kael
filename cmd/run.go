@@ -18,12 +18,12 @@ func newRunCmd() *cobra.Command {
 			if err := bootstrap(); err != nil {
 				return fmt.Errorf("bootstrap: %w", err)
 			}
-			return runScript(cmd.Context(), viper.GetString("kit"), viper.GetBool("refresh"), args[0])
+			refresh, _ := cmd.Flags().GetBool("refresh")
+			return runScript(cmd.Context(), viper.GetString("kit"), refresh, args[0])
 		},
 	}
 
 	cmd.Flags().Bool("refresh", false, "force re-fetch of tool sources")
-	viper.BindPFlag("refresh", cmd.Flags().Lookup("refresh"))
 
 	return cmd
 }
