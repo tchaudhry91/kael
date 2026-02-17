@@ -19,7 +19,3 @@ linters:
     gocritic:
       disabled-checks:
         - captLocal  # gopher-lua convention uses L for *lua.LState
-
-issues:
-  exclude-dirs:
-    - vendor
