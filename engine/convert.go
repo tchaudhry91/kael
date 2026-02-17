@@ -41,6 +41,16 @@ func luaToGo(lv lua.LValue) any {
 
 // formatLuaValue produces a human-readable string representation of a Lua value.
 func formatLuaValue(lv lua.LValue, indent string) string {
+	return formatLuaValueDepth(lv, indent, -1, 0)
+}
+
+// FormatLuaValuePP produces a human-readable string with a max depth limit.
+// Tables beyond maxDepth are shown as "{...N items}".
+func FormatLuaValuePP(lv lua.LValue, maxDepth int) string {
+	return formatLuaValueDepth(lv, "", maxDepth, 0)
+}
+
+func formatLuaValueDepth(lv lua.LValue, indent string, maxDepth, depth int) string {
 	switch v := lv.(type) {
 	case *lua.LNilType:
 		return "nil"
@@ -51,21 +61,25 @@ func formatLuaValue(lv lua.LValue, indent string) string {
 	case lua.LString:
 		return fmt.Sprintf("%q", string(v))
 	case *lua.LTable:
-		if v.MaxN() == 0 && v.Len() == 0 {
-			// Check if truly empty
-			empty := true
-			v.ForEach(func(_, _ lua.LValue) { empty = false })
-			if empty {
-				return "{}"
-			}
+		// Count items
+		count := 0
+		v.ForEach(func(_, _ lua.LValue) { count++ })
+		if count == 0 {
+			return "{}"
 		}
+
+		// Depth limit reached
+		if maxDepth >= 0 && depth >= maxDepth {
+			return fmt.Sprintf("{...%d items}", count)
+		}
+
 		var lines []string
 		nextIndent := indent + "  "
 
 		// Array part
 		maxN := v.MaxN()
 		for i := 1; i <= maxN; i++ {
-			lines = append(lines, nextIndent+formatLuaValue(v.RawGetInt(i), nextIndent))
+			lines = append(lines, nextIndent+formatLuaValueDepth(v.RawGetInt(i), nextIndent, maxDepth, depth+1))
 		}
 
 		// Map part (collect and sort keys for stable output)
@@ -79,7 +93,7 @@ func formatLuaValue(lv lua.LValue, indent string) string {
 		sort.Strings(keys)
 		for _, k := range keys {
 			val := v.RawGetString(k)
-			lines = append(lines, fmt.Sprintf("%s%s = %s", nextIndent, k, formatLuaValue(val, nextIndent)))
+			lines = append(lines, fmt.Sprintf("%s%s = %s", nextIndent, k, formatLuaValueDepth(val, nextIndent, maxDepth, depth+1)))
 		}
 
 		return "{\n" + strings.Join(lines, ",\n") + "\n" + indent + "}"

@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -81,18 +80,6 @@ func (e *Engine) RegisterTools() {
 	e.lstate.SetGlobal("tools", tools)
 }
 
-func (e *Engine) RegisterHelpers() {
-	// json
-	jsonTbl := e.lstate.NewTable()
-	e.lstate.SetField(jsonTbl, "encode", e.lstate.NewFunction(e.jsonEncode))
-	e.lstate.SetField(jsonTbl, "pretty", e.lstate.NewFunction(e.jsonEncodePretty))
-	e.lstate.SetField(jsonTbl, "decode", e.lstate.NewFunction(e.jsonDecode))
-	e.lstate.SetGlobal("json", jsonTbl)
-
-	// inspect
-	e.lstate.SetGlobal("inspect", e.lstate.NewFunction(e.inspect))
-}
-
 // ListTools walks the kit global and returns a tree of all registered tools.
 func (e *Engine) ListTools() *KitNode {
 	kit := e.lstate.GetGlobal("kit")
@@ -122,42 +109,26 @@ func (e *Engine) walkTable(tbl *lua.LTable) *KitNode {
 	return node
 }
 
-func (e *Engine) jsonEncode(L *lua.LState) int {
-	val := L.CheckAny(1)
-	valG := luaToGo(val)
-	data, err := json.Marshal(valG)
+// RunStringResult executes code and returns the first return value.
+// Used by the REPL for auto-printing expression results.
+func (e *Engine) RunStringResult(ctx context.Context, code string) (lua.LValue, error) {
+	e.lstate.SetContext(ctx)
+	defer e.lstate.SetContext(nil)
+
+	top := e.lstate.GetTop()
+	fn, err := e.lstate.LoadString(code)
 	if err != nil {
-		L.RaiseError("Data Marshal Failure: %s", err.Error())
+		return nil, err
 	}
-	L.Push(lua.LString(string(data)))
-	return 1
-}
-
-func (e *Engine) jsonEncodePretty(L *lua.LState) int {
-	val := L.CheckAny(1)
-	valG := luaToGo(val)
-	data, err := json.MarshalIndent(valG, "", "  ")
-	if err != nil {
-		L.RaiseError("Data Marshal Failure: %s", err.Error())
+	e.lstate.Push(fn)
+	if err := e.lstate.PCall(0, 1, nil); err != nil {
+		e.lstate.SetTop(top)
+		return nil, err
 	}
-	L.Push(lua.LString(string(data)))
-	return 1
-}
 
-func (e *Engine) jsonDecode(L *lua.LState) int {
-	str := L.CheckString(1)
-	var val any
-	if err := json.Unmarshal([]byte(str), &val); err != nil {
-		L.RaiseError("JSON Decode Failure: %s", err.Error())
-	}
-	L.Push(goToLua(L, val))
-	return 1
-}
-
-func (e *Engine) inspect(L *lua.LState) int {
-	val := L.CheckAny(1)
-	L.Push(lua.LString(formatLuaValue(val, "")))
-	return 1
+	ret := e.lstate.Get(-1)
+	e.lstate.SetTop(top)
+	return ret, nil
 }
 
 func (e *Engine) defineTool(L *lua.LState) int {

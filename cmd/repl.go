@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/tchaudhry91/kael/engine"
+	lua "github.com/yuin/gopher-lua"
 )
 
 // ANSI color helpers
@@ -96,6 +97,11 @@ func startRepl(kitPath string, refresh bool) error {
 			return nil
 		}
 
+		if buf.Len() == 0 && line == "help" {
+			printReplHelp()
+			continue
+		}
+
 		// Accumulate into buffer
 		if buf.Len() > 0 {
 			buf.WriteString("\n")
@@ -119,8 +125,19 @@ func startRepl(kitPath string, refresh bool) error {
 		}
 
 		// Valid syntax — execute
-		if err := e.RunString(context.Background(), code); err != nil {
-			replError(err.Error())
+		// Try as expression first for auto-print (like Python REPL)
+		exprCode := "return (" + code + ")"
+		if e.CheckSyntax(exprCode) == nil {
+			result, err := e.RunStringResult(context.Background(), exprCode)
+			if err != nil {
+				replError(err.Error())
+			} else if result != nil && result != lua.LNil {
+				fmt.Println(engine.FormatLuaValuePP(result, 4))
+			}
+		} else {
+			if err := e.RunString(context.Background(), code); err != nil {
+				replError(err.Error())
+			}
 		}
 
 		buf.Reset()
@@ -232,4 +249,26 @@ func isBreak(r rune) bool {
 		return true
 	}
 	return false
+}
+
+func printReplHelp() {
+	fmt.Print(colorBold + "Helpers" + colorReset + `
+  pp(val, depth?)          pretty-print a value (default depth 4)
+  keys(tbl)                list all keys in a table
+  pluck(list, field)       extract one field from each item in a list
+  count(tbl)               count entries in a table (arrays and maps)
+  jq(val, filter)          pipe a value through jq
+  writefile(path, content) write to file (tables become JSON)
+  inspect(val)             return string representation of a value
+  json.encode(val)         serialize to JSON string
+  json.pretty(val)         serialize to indented JSON string
+  json.decode(str)         parse a JSON string
+
+` + colorBold + "REPL" + colorReset + `
+  Expressions auto-print their result
+  Tab completes kit.* tool paths
+  Multiline blocks (if/for/function) are detected automatically
+  help                     show this help
+  exit / quit / ctrl-d     exit the REPL
+`)
 }
