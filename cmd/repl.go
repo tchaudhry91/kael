@@ -258,7 +258,8 @@ func printReplHelp() {
   pluck(list, field)       extract one field from each item in a list
   count(tbl)               count entries in a table (arrays and maps)
   jq(val, filter)          pipe a value through jq
-  writefile(path, content) write to file (tables become JSON)
+  readfile(path)           read a file, return contents as string
+  writefile(path, str)     write a string to a file
   inspect(val)             return string representation of a value
   json.encode(val)         serialize to JSON string
   json.pretty(val)         serialize to indented JSON string
@@ -268,6 +269,7 @@ func printReplHelp() {
   Expressions auto-print their result
   Tab completes kit.* tool paths
   Multiline blocks (if/for/function) are detected automatically
+  Use globals (not local) for variables that persist across lines
   help                     show this help
   exit / quit / ctrl-d     exit the REPL
 `)

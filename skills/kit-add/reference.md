@@ -26,7 +26,7 @@ return tools.define_tool({
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `entrypoint` | string | auto-detected | Script filename within the source directory. |
-| `executor` | string | `"docker"` | Execution environment: `"docker"` or `"native"`. |
+| `executor` | string | `"docker"` | Execution environment: `"docker"` or `"native"`. Note: `kit add` defaults to `"native"`. |
 | `type` | string | auto-detected | Script type: `"python"`, `"shell"`, `"node"`, `"other"`. |
 | `subdir` | string | — | Subdirectory within source (for monorepos). |
 | `tag` | string | — | Git tag, branch, or commit hash for git sources. |

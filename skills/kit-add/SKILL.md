@@ -11,7 +11,7 @@ You are analyzing a script to produce a JSON tool definition. The user provides 
 ## What to do
 
 1. Read the script at the given path
-2. If the prompt includes "Additional instructions", those are directives from the user — follow them. They take priority over your own analysis when they conflict (e.g. if the user says "use native executor", set executor accordingly even if you would have chosen docker).
+2. If the prompt includes "Additional instructions", those are directives from the user — follow them. They take priority over your own analysis when they conflict.
 3. Analyze the script to determine the fields below
 4. Output ONLY a valid JSON object — no explanation, no markdown, no code fences
 
@@ -19,7 +19,7 @@ You are analyzing a script to produce a JSON tool definition. The user provides 
 
 1. **type**: File extension → `.py` = `"python"`, `.sh` = `"shell"`, `.js`/`.ts` = `"node"`
 2. **entrypoint**: The script filename (e.g. `"download.py"`)
-3. **executor**: Execution environment — `"docker"` (default, omit) or `"native"` (runs directly on host). Omit if docker.
+3. **executor**: Execution environment — `"native"` (default, omit) or `"docker"` (containerized). Omit if native.
 4. **input_adapter**: How the script receives input
    - `json.load(sys.stdin)`, `$(cat)` with `jq`, `process.stdin` → `"json"`
    - `argparse`, `getopts`, named flags (`--key value`) → omit (args is the default)
@@ -31,13 +31,12 @@ You are analyzing a script to produce a JSON tool definition. The user provides 
    - `json.dump()`, pipes through `jq` → `"json"`
    - `print()`, `echo` for plain text → omit (text is the default)
    - One item per line → `"lines"`
-7. **schema**: Input and output field types as FLAT type strings
-   - For input: read argument names, JSON keys accessed from parsed input
-   - For output: ONLY include output schema if the output structure is explicitly and unambiguously constructed in the script (e.g. `json.dump({"results": results})`, a clearly defined dict/object being serialized). If the script pipes through an external command (`az`, `kubectl`, `curl`), wraps another tool's output, or the output structure is not directly visible in the code, OMIT the output schema entirely.
+7. **schema**: Input field types ONLY — do NOT include output schema
+   - Read argument names, JSON keys accessed from parsed input
    - Every value MUST be a simple type string: `"string"`, `"number"`, `"boolean"`, `"object"`, `"string[]"`, `"object[]"`
    - Append `?` for optional: `"string?"`, `"number?"`
    - NEVER use nested objects or arrays as values — always use flat type strings
-   - Example: `{"input":{"urls":"string[]","timeout":"number?"},"output":{"results":"object[]"}}`
+   - Example: `{"input":{"urls":"string[]","timeout":"number?"}}`
 8. **deps**: Third-party packages the script needs
    - Python: look for `import` statements, match against stdlib. Add non-stdlib packages.
    - Node: look for `require()` / `import` of non-builtin modules
@@ -59,22 +58,22 @@ You are analyzing a script to produce a JSON tool definition. The user provides 
 
 Output ONLY this JSON object, nothing else:
 
-{"type":"python","entrypoint":"script.py","input_adapter":"json","output_adapter":"json","schema":{"input":{"urls":"string[]","timeout":"number?"},"output":{"results":"object[]"}},"deps":["requests"],"env":["KUBECONFIG"]}
+{"type":"shell","entrypoint":"script.sh","input_adapter":"positional_args","args_order":["tenant_name"],"output_adapter":"json","schema":{"input":{"tenant_name":"string"}},"deps":["jq"],"env":["KUBECONFIG"]}
 
 Rules:
-- Omit `executor` if it would be `"docker"` (docker is the default)
+- Omit `executor` if it would be `"native"` (native is the default)
 - Omit `input_adapter` if it would be `"args"`
 - Omit `output_adapter` if it would be `"text"`
 - Omit `deps` if empty — `deps` is a TOP-LEVEL field, NOT inside `schema`
 - Omit `env` if empty — `env` is a TOP-LEVEL field, NOT inside `schema`
 - Include `args_order` only when `input_adapter` is `"positional_args"`
-- Always include `type`, `entrypoint`, and `schema` (but output schema can be omitted if uncertain)
-- When in doubt about output structure, omit the output schema — do not guess
+- Always include `type`, `entrypoint`, and `schema`
+- Schema contains ONLY `input` — NEVER include `output` schema
 - All schema values MUST be flat type strings (`"string"`, `"number?"`, `"object[]"`, etc.) — never nested objects or arrays
 - Output raw JSON only — no markdown, no code fences, no explanation
 
 ## Additional instructions from user
 
-The prompt may include an "Additional instructions" section after the script path. These are user-provided directives that you MUST follow. They take priority over your own analysis when they conflict. For example, if the user says "use native executor", you MUST set `"executor":"native"` in the output. Apply them directly to the JSON output.
+The prompt may include an "Additional instructions" section after the script path. These are user-provided directives that you MUST follow. They take priority over your own analysis when they conflict. For example, if the user says "use docker executor", you MUST set `"executor":"docker"` in the output. Apply them directly to the JSON output.
 
 For reference on kael's define_tool API and adapter details, see [reference.md](reference.md).

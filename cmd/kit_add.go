@@ -27,8 +27,7 @@ type toolAnalysis struct {
 }
 
 type toolAnalysisSchema struct {
-	Input  map[string]interface{} `json:"input,omitempty"`
-	Output map[string]interface{} `json:"output,omitempty"`
+	Input map[string]interface{} `json:"input,omitempty"`
 }
 
 func newKitAddCmd() *cobra.Command {
@@ -43,18 +42,20 @@ to skip AI and generate a skeleton definition.`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			manual, _ := cmd.Flags().GetBool("manual")
+			force, _ := cmd.Flags().GetBool("force")
 			extraPrompt, _ := cmd.Flags().GetString("prompt")
-			return kitAdd(args[0], args[1], manual, extraPrompt)
+			return kitAdd(args[0], args[1], manual, force, extraPrompt)
 		},
 	}
 
 	cmd.Flags().Bool("manual", false, "skip AI analysis, generate skeleton definition")
+	cmd.Flags().Bool("force", false, "overwrite existing tool definition")
 	cmd.Flags().String("prompt", "", "additional instructions for the AI analysis")
 
 	return cmd
 }
 
-func kitAdd(source, namespace string, manual bool, extraPrompt string) error {
+func kitAdd(source, namespace string, manual, force bool, extraPrompt string) error {
 	kitPath := viper.GetString("kit")
 
 	// 1. Validate namespace exists
@@ -106,8 +107,8 @@ func kitAdd(source, namespace string, manual bool, extraPrompt string) error {
 
 	// 6. Write Lua file
 	luaPath := filepath.Join(nsDir, toolName+".lua")
-	if _, err := os.Stat(luaPath); err == nil {
-		return fmt.Errorf("tool %q already exists at %s", toolName, luaPath)
+	if _, err := os.Stat(luaPath); err == nil && !force {
+		return fmt.Errorf("tool %q already exists at %s (use --force to overwrite)", toolName, luaPath)
 	}
 	if err := os.WriteFile(luaPath, []byte(luaContent), 0644); err != nil {
 		return fmt.Errorf("write tool definition: %w", err)
@@ -209,9 +210,9 @@ func skeletonAnalysis(entrypoint string) toolAnalysis {
 	return toolAnalysis{
 		Type:       t,
 		Entrypoint: entrypoint,
+		Executor:   "native",
 		Schema: &toolAnalysisSchema{
-			Input:  map[string]interface{}{"param": "string"},
-			Output: map[string]interface{}{"output": "string"},
+			Input: map[string]interface{}{"param": "string"},
 		},
 	}
 }
@@ -320,9 +321,11 @@ func generateLua(source string, a toolAnalysis) string {
 	b.WriteString(fmt.Sprintf("    entrypoint = %q,\n", a.Entrypoint))
 	b.WriteString(fmt.Sprintf("    type = %q,\n", a.Type))
 
-	if a.Executor != "" && a.Executor != "docker" {
-		b.WriteString(fmt.Sprintf("    executor = %q,\n", a.Executor))
+	executor := a.Executor
+	if executor == "" {
+		executor = "native"
 	}
+	b.WriteString(fmt.Sprintf("    executor = %q,\n", executor))
 
 	if len(a.Deps) > 0 {
 		quoted := make([]string, len(a.Deps))
@@ -354,22 +357,13 @@ func generateLua(source string, a toolAnalysis) string {
 		b.WriteString(fmt.Sprintf("    env = {%s},\n", strings.Join(quoted, ", ")))
 	}
 
-	if a.Schema != nil && (len(a.Schema.Input) > 0 || len(a.Schema.Output) > 0) {
+	if a.Schema != nil && len(a.Schema.Input) > 0 {
 		b.WriteString("    schema = {\n")
-		if len(a.Schema.Input) > 0 {
-			b.WriteString("        input = {\n")
-			for k, v := range a.Schema.Input {
-				b.WriteString(fmt.Sprintf("            %s = %q,\n", k, flattenType(v)))
-			}
-			b.WriteString("        },\n")
+		b.WriteString("        input = {\n")
+		for k, v := range a.Schema.Input {
+			b.WriteString(fmt.Sprintf("            %s = %q,\n", k, flattenType(v)))
 		}
-		if len(a.Schema.Output) > 0 {
-			b.WriteString("        output = {\n")
-			for k, v := range a.Schema.Output {
-				b.WriteString(fmt.Sprintf("            %s = %q,\n", k, flattenType(v)))
-			}
-			b.WriteString("        },\n")
-		}
+		b.WriteString("        },\n")
 		b.WriteString("    },\n")
 	}
 

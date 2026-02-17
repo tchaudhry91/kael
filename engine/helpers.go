@@ -35,6 +35,7 @@ func (e *Engine) RegisterHelpers() {
 	e.lstate.SetGlobal("jq", e.lstate.NewFunction(e.jqHelper))
 
 	// file I/O
+	e.lstate.SetGlobal("readfile", e.lstate.NewFunction(e.readfileHelper))
 	e.lstate.SetGlobal("writefile", e.lstate.NewFunction(e.writefileHelper))
 }
 
@@ -160,30 +161,23 @@ func (e *Engine) jqHelper(L *lua.LState) int {
 	return 1
 }
 
-// writefile(path, content) — write content to a file.
-// If content is a table, serialize as pretty JSON. If string, write as-is.
+// readfile(path) — read a file and return its contents as a string.
+func (e *Engine) readfileHelper(L *lua.LState) int {
+	path := L.CheckString(1)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		L.RaiseError("readfile: %s", err.Error())
+		return 0
+	}
+	L.Push(lua.LString(string(data)))
+	return 1
+}
+
+// writefile(path, content) — write a string to a file.
 func (e *Engine) writefileHelper(L *lua.LState) int {
 	path := L.CheckString(1)
-	val := L.CheckAny(2)
-
-	var data []byte
-	switch v := val.(type) {
-	case lua.LString:
-		data = []byte(string(v))
-	case *lua.LTable:
-		goVal := luaToGo(v)
-		var err error
-		data, err = json.MarshalIndent(goVal, "", "  ")
-		if err != nil {
-			L.RaiseError("writefile: marshal failed: %s", err.Error())
-			return 0
-		}
-		data = append(data, '\n')
-	default:
-		data = []byte(val.String())
-	}
-
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	content := L.CheckString(2)
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		L.RaiseError("writefile: %s", err.Error())
 		return 0
 	}

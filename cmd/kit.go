@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -70,7 +71,16 @@ func newKitCmd() *cobra.Command {
 		},
 	}
 
-	kitCmd.AddCommand(listCmd, validateCmd, initCmd, describeCmd, newKitAddCmd(), removeCmd)
+	editCmd := &cobra.Command{
+		Use:   "edit <tool.path>",
+		Short: "Open a tool definition in $EDITOR",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return kitEdit(viper.GetString("kit"), args[0])
+		},
+	}
+
+	kitCmd.AddCommand(listCmd, validateCmd, initCmd, describeCmd, newKitAddCmd(), removeCmd, editCmd)
 	return kitCmd
 }
 
@@ -325,6 +335,36 @@ func kitRemove(kitPath, toolPath string) error {
 	fmt.Printf("unwired %s from %s\n", toolName, parentInit)
 
 	// 5. Validate
+	if err := kitValidate(kitPath); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: kit validation failed: %v\n", err)
+	}
+
+	return nil
+}
+
+func kitEdit(kitPath, toolPath string) error {
+	// Resolve tool path to Lua file
+	parts := strings.Split(toolPath, ".")
+	luaFile := filepath.Join(kitPath, filepath.Join(parts[:len(parts)-1]...), parts[len(parts)-1]+".lua")
+
+	if _, err := os.Stat(luaFile); os.IsNotExist(err) {
+		return fmt.Errorf("tool %q not found at %s", toolPath, luaFile)
+	}
+
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = "vi"
+	}
+
+	cmd := exec.Command(editor, luaFile)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("editor: %w", err)
+	}
+
+	// Validate after edit
 	if err := kitValidate(kitPath); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: kit validation failed: %v\n", err)
 	}
