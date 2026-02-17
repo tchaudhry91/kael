@@ -35,7 +35,7 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	rootCmd.PersistentFlags().String("kit", defaultKitPath(), "path to kit directory")
-	viper.BindPFlag("kit", rootCmd.PersistentFlags().Lookup("kit"))
+	_ = viper.BindPFlag("kit", rootCmd.PersistentFlags().Lookup("kit"))
 
 	rootCmd.SetVersionTemplate("kael version {{.Version}}\n")
 
@@ -58,7 +58,7 @@ func initConfig() {
 		viper.SetConfigType("yaml")
 	}
 	// Silently ignore missing config file
-	viper.ReadInConfig()
+	_ = viper.ReadInConfig()
 }
 
 func main() {

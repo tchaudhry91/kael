@@ -30,7 +30,7 @@ func adaptInput(inputAdapter string, merged *lua.LTable, argsOrder []string) (st
 		input := luaToGo(merged)
 		data, err := json.Marshal(input)
 		if err != nil {
-			return nil, nil, fmt.Errorf("Data Marshal Failure: %s", err.Error())
+			return nil, nil, fmt.Errorf("data marshal failure: %s", err.Error())
 		}
 		return data, nil, nil
 	case InputAdapterPositionalArgs:
@@ -127,7 +127,7 @@ func adaptOutput(outputAdapter string, outputB []byte) (any, error) {
 	case OutputAdapterJSON:
 		var output any
 		if err := json.Unmarshal(outputB, &output); err != nil {
-			return nil, fmt.Errorf("Data UnMarshal Failure: %s", err.Error())
+			return nil, fmt.Errorf("data unmarshal failure: %s", err.Error())
 		}
 		return output, nil
 	case OutputAdapterLines:

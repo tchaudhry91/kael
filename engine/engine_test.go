@@ -324,7 +324,7 @@ func TestToolInvalidJSONResponse(t *testing.T) {
 	err := e.RunString(context.Background(), `
 		local ok, err = pcall(kit.test, {})
 		assert(not ok, "expected pcall to fail")
-		assert(string.find(err, "Data UnMarshal Failure"), "expected unmarshal error, got: " .. err)
+		assert(string.find(err, "data unmarshal failure"), "expected unmarshal error, got: " .. err)
 	`)
 	if err != nil {
 		t.Fatalf("test failed: %v", err)
@@ -461,10 +461,8 @@ func TestListTools(t *testing.T) {
 	}
 	if cfg, ok := k8s.Tools["pods"]; !ok {
 		t.Error("expected kubernetes.pods tool")
-	} else {
-		if cfg.Type != "python" {
-			t.Errorf("kubernetes.pods type: got %q", cfg.Type)
-		}
+	} else if cfg.Type != "python" {
+		t.Errorf("kubernetes.pods type: got %q", cfg.Type)
 	}
 }
 

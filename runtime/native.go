@@ -21,7 +21,9 @@ func nativeRun(ctx context.Context, sourcePath string, opts RunOptions, input []
 	entrypoint := opts.Entrypoint
 
 	// Build command: interpreter [args...] entrypoint [extra args...]
-	cmdArgs := append(interpArgs, entrypoint)
+	cmdArgs := make([]string, 0, len(interpArgs)+1+len(opts.ExtraArgs))
+	cmdArgs = append(cmdArgs, interpArgs...)
+	cmdArgs = append(cmdArgs, entrypoint)
 	cmdArgs = append(cmdArgs, opts.ExtraArgs...)
 
 	var cancel context.CancelFunc

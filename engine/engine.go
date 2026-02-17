@@ -53,13 +53,13 @@ func (e *Engine) Close() {
 
 func (e *Engine) RunFile(ctx context.Context, path string) error {
 	e.lstate.SetContext(ctx)
-	defer e.lstate.SetContext(nil)
+	defer e.lstate.SetContext(context.Background())
 	return e.lstate.DoFile(path)
 }
 
 func (e *Engine) RunString(ctx context.Context, code string) error {
 	e.lstate.SetContext(ctx)
-	defer e.lstate.SetContext(nil)
+	defer e.lstate.SetContext(context.Background())
 	return e.lstate.DoString(code)
 }
 
@@ -113,7 +113,7 @@ func (e *Engine) walkTable(tbl *lua.LTable) *KitNode {
 // Used by the REPL for auto-printing expression results.
 func (e *Engine) RunStringResult(ctx context.Context, code string) (lua.LValue, error) {
 	e.lstate.SetContext(ctx)
-	defer e.lstate.SetContext(nil)
+	defer e.lstate.SetContext(context.Background())
 
 	top := e.lstate.GetTop()
 	fn, err := e.lstate.LoadString(code)
@@ -283,11 +283,11 @@ func (e *Engine) defineTool(L *lua.LState) int {
 // and calls it with the given input map. Returns the output as a Go value.
 func (e *Engine) ExecTool(ctx context.Context, toolPath string, input map[string]any) (any, error) {
 	e.lstate.SetContext(ctx)
-	defer e.lstate.SetContext(nil)
+	defer e.lstate.SetContext(context.Background())
 
 	// Walk kit.<namespace>.<tool> to find the Lua function
 	parts := strings.Split(toolPath, ".")
-	var current lua.LValue = e.lstate.GetGlobal("kit")
+	current := e.lstate.GetGlobal("kit")
 	for _, part := range parts {
 		tbl, ok := current.(*lua.LTable)
 		if !ok {

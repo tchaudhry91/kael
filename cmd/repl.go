@@ -67,7 +67,7 @@ func startRepl(kitPath string, refresh bool) error {
 	if err != nil {
 		return fmt.Errorf("readline init: %w", err)
 	}
-	defer rl.Close()
+	defer func() { _ = rl.Close() }()
 
 	fmt.Printf("%skael repl%s — tab to complete, ctrl-d to exit\n", colorBold, colorReset)
 
@@ -227,7 +227,7 @@ func (c *kitCompleter) Do(line []rune, pos int) ([][]rune, int) {
 		return nil, 0
 	}
 
-	if !strings.HasPrefix(word, "k") && !strings.HasPrefix("kit", word) {
+	if !strings.HasPrefix(word, "k") && !strings.HasPrefix("kit", word) { //nolint:gocritic // intentional: checks if "kit" starts with partial input
 		return nil, 0
 	}
 

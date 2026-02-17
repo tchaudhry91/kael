@@ -234,7 +234,9 @@ func aiAnalysis(scriptPath string, extraPrompt string) (toolAnalysis, error) {
 		return toolAnalysis{}, fmt.Errorf("invalid ai.command: %q", aiCommand)
 	}
 
-	args := append(parts[1:], prompt)
+	args := make([]string, 0, len(parts)-1+1)
+	args = append(args, parts[1:]...)
+	args = append(args, prompt)
 	cmd := exec.Command(parts[0], args...)
 	cmd.Stderr = os.Stderr
 
@@ -271,9 +273,10 @@ func extractJSON(s string) string {
 	for i := start; i < len(s); i++ {
 		ch := s[i]
 		if inString {
-			if ch == '\\' {
+			switch ch {
+			case '\\':
 				i++ // skip escaped character
-			} else if ch == '"' {
+			case '"':
 				inString = false
 			}
 			continue
