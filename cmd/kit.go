@@ -250,8 +250,7 @@ func kitInit(kitPath, namespace string) error {
 	// Walk the chain, creating each level
 	for i := range parts {
 		// Directory for this level
-		dirParts := append([]string{kitPath}, parts[:i+1]...)
-		nsDir := filepath.Join(dirParts...)
+		nsDir := filepath.Join(kitPath, filepath.Join(parts[:i+1]...))
 		if err := os.MkdirAll(nsDir, 0755); err != nil {
 			return fmt.Errorf("create namespace directory: %w", err)
 		}
@@ -270,8 +269,7 @@ func kitInit(kitPath, namespace string) error {
 		if i == 0 {
 			parentInit = topInit
 		} else {
-			parentParts := append([]string{kitPath}, parts[:i]...)
-			parentInit = filepath.Join(append(parentParts, "init.lua")...)
+			parentInit = filepath.Join(kitPath, filepath.Join(parts[:i]...), "init.lua")
 		}
 		// Require path is dotted: "monitoring.prometheus"
 		requirePath := strings.Join(parts[:i+1], ".")
@@ -282,7 +280,7 @@ func kitInit(kitPath, namespace string) error {
 		}
 	}
 
-	leafDir := filepath.Join(append([]string{kitPath}, parts...)...)
+	leafDir := filepath.Join(kitPath, filepath.Join(parts...))
 	fmt.Printf("namespace %q ready at %s\n", namespace, leafDir)
 	return nil
 }
@@ -306,7 +304,7 @@ func kitRemove(kitPath, toolPath string) error {
 	nsParts := parts[:len(parts)-1]
 
 	// 3. Delete the Lua file
-	luaFile := filepath.Join(append(append([]string{kitPath}, nsParts...), toolName+".lua")...)
+	luaFile := filepath.Join(kitPath, filepath.Join(nsParts...), toolName+".lua")
 	if err := os.Remove(luaFile); err != nil {
 		return fmt.Errorf("remove %s: %w", luaFile, err)
 	}
@@ -317,7 +315,7 @@ func kitRemove(kitPath, toolPath string) error {
 	if len(nsParts) == 0 {
 		parentInit = filepath.Join(kitPath, "init.lua")
 	} else {
-		parentInit = filepath.Join(append(append([]string{kitPath}, nsParts...), "init.lua")...)
+		parentInit = filepath.Join(kitPath, filepath.Join(nsParts...), "init.lua")
 	}
 
 	requirePath := toolPath

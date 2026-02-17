@@ -60,6 +60,7 @@ func newTestEngine(t *testing.T, mock *mockRunner, kitFiles map[string]string) *
 		Registry: make(map[*lua.LFunction]ToolConfig),
 	}
 	e.RegisterTools()
+	e.RegisterHelpers()
 	if err := L.DoString("kit = require(\"init\")"); err != nil {
 		t.Fatalf("failed to load kit: %v", err)
 	}

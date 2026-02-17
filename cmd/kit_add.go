@@ -258,7 +258,8 @@ func aiAnalysis(scriptPath string, extraPrompt string) (toolAnalysis, error) {
 	return analysis, nil
 }
 
-// extractJSON finds the first JSON object in a string by matching braces.
+// extractJSON finds the first JSON object in a string by matching braces,
+// correctly skipping braces inside quoted strings.
 func extractJSON(s string) string {
 	start := strings.Index(s, "{")
 	if start == -1 {
@@ -266,8 +267,20 @@ func extractJSON(s string) string {
 	}
 
 	depth := 0
+	inString := false
 	for i := start; i < len(s); i++ {
-		switch s[i] {
+		ch := s[i]
+		if inString {
+			if ch == '\\' {
+				i++ // skip escaped character
+			} else if ch == '"' {
+				inString = false
+			}
+			continue
+		}
+		switch ch {
+		case '"':
+			inString = true
 		case '{':
 			depth++
 		case '}':

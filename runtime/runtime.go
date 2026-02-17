@@ -43,11 +43,6 @@ func (e *RunError) Error() string {
 	return fmt.Sprintf("exit code %d", e.ExitCode)
 }
 
-// Runner executes tools. This is the interface the engine depends on.
-type Runner interface {
-	Run(ctx context.Context, opts RunOptions, input []byte) ([]byte, error)
-}
-
 // DefaultRunner is the standard implementation that resolves sources
 // and dispatches to docker or native executors.
 type DefaultRunner struct{}
