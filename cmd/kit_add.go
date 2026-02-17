@@ -37,6 +37,7 @@ type kitAddOptions struct {
 	manual      bool
 	force       bool
 	extraPrompt string
+	name        string // override the tool/Lua file name
 	// Override flags — applied post-analysis
 	executor   string
 	entrypoint string
@@ -67,10 +68,12 @@ to skip AI and generate a skeleton definition.`,
 			subdir, _ := cmd.Flags().GetString("subdir")
 			tag, _ := cmd.Flags().GetString("tag")
 			toolType, _ := cmd.Flags().GetString("type")
+			name, _ := cmd.Flags().GetString("name")
 			opts := kitAddOptions{
 				manual:      manual,
 				force:       force,
 				extraPrompt: extraPrompt,
+				name:        name,
 				executor:    executor,
 				entrypoint:  entrypoint,
 				subdir:      subdir,
@@ -89,6 +92,7 @@ to skip AI and generate a skeleton definition.`,
 	cmd.Flags().String("subdir", "", "override subdirectory within source")
 	cmd.Flags().String("tag", "", "git tag, branch, or commit hash")
 	cmd.Flags().String("type", "", "override script type (python, shell, node)")
+	cmd.Flags().String("name", "", "override tool name (Lua filename)")
 
 	return cmd
 }
@@ -183,6 +187,9 @@ func kitAdd(source, namespace string, opts kitAddOptions) error {
 
 	// 7. Generate Lua definition
 	toolName := strings.TrimSuffix(entrypoint, filepath.Ext(entrypoint))
+	if opts.name != "" {
+		toolName = opts.name
+	}
 	luaContent := generateLua(originalSource, analysis)
 
 	// 8. Write Lua file

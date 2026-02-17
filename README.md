@@ -67,6 +67,7 @@ If you have an AI tool configured, kael will analyze the script and generate a c
 | `--subdir tools/` | Override subdirectory within source |
 | `--tag v1.2.0` | Pin to a git tag, branch, or commit |
 | `--type python` | Override script type (python, shell, node) |
+| `--name my_tool` | Override tool name (Lua filename) |
 
 Override flags are applied after AI analysis, so you can let the AI do most of the work and just correct specific fields.
 

@@ -32,7 +32,10 @@ You are analyzing a script to produce a JSON tool definition. The user provides 
    - `print()`, `echo` for plain text → omit (text is the default)
    - One item per line → `"lines"`
 7. **schema**: Input field types ONLY — do NOT include output schema
-   - Read argument names, JSON keys accessed from parsed input
+   - Field names MUST match what the script accepts on the command line, NOT internal variable names
+   - For `args` adapter: use the CLI flag name (after `--`). Example: `argparse` with `--from` → field name is `"from"`, NOT `"from_time"` even if the Python variable is `from_time`
+   - For `json` adapter: use the JSON key names the script reads from stdin
+   - For `positional_args` adapter: use descriptive names that match `args_order`
    - Every value MUST be a simple type string: `"string"`, `"number"`, `"boolean"`, `"object"`, `"string[]"`, `"object[]"`
    - Append `?` for optional: `"string?"`, `"number?"`
    - NEVER use nested objects or arrays as values — always use flat type strings
@@ -51,8 +54,11 @@ You are analyzing a script to produce a JSON tool definition. The user provides 
 ## Naming convention
 
 - Always use underscores (`_`) in field names, never hyphens (`-`).
-  - Good: `tenant_name`, `from_time`, `resource_group`
-  - Bad: `tenant-name`, `from-time`, `resource-group`
+  - Good: `tenant_name`, `resource_group`
+  - Bad: `tenant-name`, `resource-group`
+- CRITICAL: Schema field names must match what the script accepts, not internal variable names.
+  - If a script uses `argparse` with `--from` and `dest="from_time"`, the field name is `from` (the CLI flag), NOT `from_time` (the Python variable).
+  - The `args` adapter converts `{from = "now-1h"}` → `--from now-1h`. Using `from_time` would produce `--from_time` which the script won't recognize.
 
 ## Output format
 
