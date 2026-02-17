@@ -52,7 +52,7 @@ kael kit add ./scripts/download.py misc
 kael kit add git@github.com:user/repo.git misc
 ```
 
-If you have an AI tool configured, kael will analyze the script and generate a complete tool definition automatically. Otherwise, use `--manual` to get a skeleton you can fill in.
+If you have an AI tool configured, kael will analyze the script and generate a complete tool definition automatically. Use `--prompt` to pass additional instructions to the AI (e.g. `--prompt "use native executor"`). Use `--manual` to skip AI and get a skeleton you can fill in.
 
 ### 4. Run it
 
@@ -103,7 +103,8 @@ return tools.define_tool({
 | `timeout` | — | Execution timeout in seconds |
 | `deps` | — | Packages to install (pip / npm / apk) |
 | `env` | — | Host environment variables to pass through |
-| `input_adapter` | `"args"` | How input reaches the script: `"args"` (CLI flags) or `"json"` (stdin) |
+| `input_adapter` | `"args"` | How input reaches the script: `"args"`, `"json"`, or `"positional_args"` |
+| `args_order` | — | Ordered field names for `positional_args` adapter |
 | `output_adapter` | `"text"` | How output is read: `"text"`, `"json"`, or `"lines"` |
 | `schema` | — | Input/output type declarations for validation |
 | `defaults` | — | Default values merged into every call |
@@ -114,6 +115,13 @@ return tools.define_tool({
 
 - `args` — Converts `{name = "world", count = 3}` into `--name world --count 3`. Booleans become standalone flags.
 - `json` — Sends the full input as JSON on stdin.
+- `positional_args` — Emits values as bare positional arguments in the order specified by `args_order`. Requires `args_order` to be set. Any remaining keys not in `args_order` are appended as `--key value` flags.
+
+```lua
+-- Script uses $1 for tenant and $2 for region
+input_adapter = "positional_args",
+args_order = {"tenant_name", "region"},
+```
 
 **Output adapters** control how stdout is interpreted:
 
@@ -192,7 +200,48 @@ Run it:
 kael run scan.lua
 ```
 
-The `kit` table mirrors your namespace tree, so `kit.infra.analysis.ssl_check(...)` calls the tool at `infra/analysis/ssl_check.lua`. Two helpers are available in every script: `inspect(value)` for pretty-printing and `json_encode(value)` / `json_decode(string)` for JSON conversion.
+The `kit` table mirrors your namespace tree, so `kit.infra.analysis.ssl_check(...)` calls the tool at `infra/analysis/ssl_check.lua`.
+
+### Built-in helpers
+
+These are available in all Lua scripts and in the REPL:
+
+| Function | Description |
+|---|---|
+| `pp(val, depth?)` | Pretty-print a value to stdout (default depth 4) |
+| `inspect(val)` | Return a string representation of any value |
+| `keys(tbl)` | Return a list of all keys in a table |
+| `pluck(list, field)` | Extract one field from each table in a list |
+| `count(tbl)` | Count entries in a table (arrays and maps) |
+| `jq(val, filter)` | Pipe a value through `jq` and return the result |
+| `writefile(path, content)` | Write to file (tables auto-serialize as JSON) |
+| `json.encode(val)` | Serialize to JSON string |
+| `json.pretty(val)` | Serialize to indented JSON string |
+| `json.decode(str)` | Parse a JSON string |
+
+## Interactive REPL
+
+Start an interactive session to explore your kit and run tools:
+
+```sh
+kael repl
+```
+
+```
+kael> kit.infra.azure.get_tenant_resources({tenant_name = "acme"})
+{
+  name = "my-vm",
+  type = "Microsoft.Compute/virtualMachines",
+  location = "eastus"
+}
+```
+
+Features:
+- **Tab completion** on `kit.*` tool paths
+- **Auto-print** — expressions display their result automatically, no `print()` needed
+- **Multiline** — blocks (`if`/`for`/`function`) are detected and continued with indentation
+- **History** — persisted to `~/.kael/history`
+- Type `help` for a list of all available helpers
 
 ## Kit management
 
