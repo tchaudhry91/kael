@@ -88,7 +88,7 @@ lookup.sh acme us-east-1
 |-------|------|-------------|
 | `schema` | table | Optional. Declares input and output field types for validation and documentation. |
 
-Schema has two sub-tables: `input` and `output`. Each maps field names to type declarations.
+Schema has an `input` sub-table that maps field names to type declarations.
 
 **Shorthand syntax**: A type string, with optional `?` suffix for optional fields.
 

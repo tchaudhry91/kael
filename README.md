@@ -50,9 +50,25 @@ kael kit add ./scripts/download.py misc
 
 # From a git repo
 kael kit add git@github.com:user/repo.git misc
+
+# From a monorepo — use // to specify a path within the repo
+kael kit add git@github.com:org/scripts.git//tools/check.py misc
 ```
 
-If you have an AI tool configured, kael will analyze the script and generate a complete tool definition automatically. Use `--prompt` to pass additional instructions to the AI (e.g. `--prompt "use native executor"`). Use `--manual` to skip AI and get a skeleton you can fill in.
+If you have an AI tool configured, kael will analyze the script and generate a complete tool definition automatically. Additional flags:
+
+| Flag | Description |
+|---|---|
+| `--manual` | Skip AI analysis, generate a skeleton definition |
+| `--force` | Overwrite an existing tool definition |
+| `--prompt "..."` | Additional instructions for the AI analysis |
+| `--executor native` | Override executor (native, docker) |
+| `--entrypoint main.py` | Override entrypoint script filename |
+| `--subdir tools/` | Override subdirectory within source |
+| `--tag v1.2.0` | Pin to a git tag, branch, or commit |
+| `--type python` | Override script type (python, shell, node) |
+
+Override flags are applied after AI analysis, so you can let the AI do most of the work and just correct specific fields.
 
 ### 4. Run it
 
@@ -83,9 +99,6 @@ return tools.define_tool({
         input = {
             url = "string",
         },
-        output = {
-            html_text = "string",
-        },
     },
 })
 ```
@@ -106,7 +119,7 @@ return tools.define_tool({
 | `input_adapter` | `"args"` | How input reaches the script: `"args"`, `"json"`, or `"positional_args"` |
 | `args_order` | — | Ordered field names for `positional_args` adapter |
 | `output_adapter` | `"text"` | How output is read: `"text"`, `"json"`, or `"lines"` |
-| `schema` | — | Input/output type declarations for validation |
+| `schema` | — | Input type declarations for validation |
 | `defaults` | — | Default values merged into every call |
 
 ### Adapters
@@ -131,7 +144,7 @@ args_order = {"tenant_name", "region"},
 
 ### Schema
 
-Declare types for input and output fields. Fields are required by default; suffix with `?` to make optional:
+Declare types for input fields. Fields are required by default; suffix with `?` to make optional:
 
 ```lua
 schema = {
@@ -139,9 +152,6 @@ schema = {
         hostnames = "array",
         port = "number?",
         timeout = "number?",
-    },
-    output = {
-        results = "array",
     },
 }
 ```
@@ -167,7 +177,6 @@ base.entrypoint = "images_in_use.sh"
 base.type = "shell"
 base.schema = {
     input = { namespace = "string?" },
-    output = { images = "array" },
 }
 return tools.define_tool(base)
 ```
@@ -214,7 +223,8 @@ These are available in all Lua scripts and in the REPL:
 | `pluck(list, field)` | Extract one field from each table in a list |
 | `count(tbl)` | Count entries in a table (arrays and maps) |
 | `jq(val, filter)` | Pipe a value through `jq` and return the result |
-| `writefile(path, content)` | Write to file (tables auto-serialize as JSON) |
+| `readfile(path)` | Read a file, return contents as a string |
+| `writefile(path, str)` | Write a string to a file |
 | `json.encode(val)` | Serialize to JSON string |
 | `json.pretty(val)` | Serialize to indented JSON string |
 | `json.decode(str)` | Parse a JSON string |
@@ -255,9 +265,24 @@ kael kit validate
 # Show full details for a tool
 kael kit describe infra.analysis.ssl_check
 
+# Open a tool definition in $EDITOR
+kael kit edit infra.analysis.ssl_check
+
 # Remove a tool
 kael kit remove misc.download
 ```
+
+## Refreshing sources
+
+Git-sourced tools are cloned once to `~/.kael/cache/` and Docker images are built once. To force a re-fetch and rebuild, use `--refresh`:
+
+```sh
+kael run --refresh scan.lua
+kael exec --refresh infra.ssl_check --hostname example.com
+kael repl --refresh
+```
+
+This runs `git fetch` + reset on cached repos and forces a fresh `docker build`.
 
 ## Configuration
 

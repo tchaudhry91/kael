@@ -18,6 +18,8 @@ type toolAnalysis struct {
 	Type          string                       `json:"type"`
 	Entrypoint    string                       `json:"entrypoint"`
 	Executor      string                       `json:"executor,omitempty"`
+	SubDir        string                       `json:"subdir,omitempty"`
+	Tag           string                       `json:"tag,omitempty"`
 	InputAdapter  string                       `json:"input_adapter,omitempty"`
 	OutputAdapter string                       `json:"output_adapter,omitempty"`
 	ArgsOrder     []string                     `json:"args_order,omitempty"`
@@ -30,12 +32,28 @@ type toolAnalysisSchema struct {
 	Input map[string]interface{} `json:"input,omitempty"`
 }
 
+// kitAddOptions holds all flags for the kit add command.
+type kitAddOptions struct {
+	manual      bool
+	force       bool
+	extraPrompt string
+	// Override flags — applied post-analysis
+	executor   string
+	entrypoint string
+	subdir     string
+	tag        string
+	toolType   string
+}
+
 func newKitAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add <source> <namespace>",
 		Short: "Add a tool to the kit from a script or git repo",
 		Long: `Add a tool to the kit by analyzing a script. Source can be a local path
 to a script file or a git URL. The namespace must already exist (use kit init).
+
+For git monorepos, use // to specify a path within the repo:
+  kael kit add git@github.com:org/repo.git//scripts/check.py myns
 
 By default, uses the configured AI tool to analyze the script. Use --manual
 to skip AI and generate a skeleton definition.`,
@@ -44,18 +62,38 @@ to skip AI and generate a skeleton definition.`,
 			manual, _ := cmd.Flags().GetBool("manual")
 			force, _ := cmd.Flags().GetBool("force")
 			extraPrompt, _ := cmd.Flags().GetString("prompt")
-			return kitAdd(args[0], args[1], manual, force, extraPrompt)
+			executor, _ := cmd.Flags().GetString("executor")
+			entrypoint, _ := cmd.Flags().GetString("entrypoint")
+			subdir, _ := cmd.Flags().GetString("subdir")
+			tag, _ := cmd.Flags().GetString("tag")
+			toolType, _ := cmd.Flags().GetString("type")
+			opts := kitAddOptions{
+				manual:      manual,
+				force:       force,
+				extraPrompt: extraPrompt,
+				executor:    executor,
+				entrypoint:  entrypoint,
+				subdir:      subdir,
+				tag:         tag,
+				toolType:    toolType,
+			}
+			return kitAdd(args[0], args[1], opts)
 		},
 	}
 
 	cmd.Flags().Bool("manual", false, "skip AI analysis, generate skeleton definition")
 	cmd.Flags().Bool("force", false, "overwrite existing tool definition")
 	cmd.Flags().String("prompt", "", "additional instructions for the AI analysis")
+	cmd.Flags().String("executor", "", "override executor (native, docker)")
+	cmd.Flags().String("entrypoint", "", "override entrypoint script filename")
+	cmd.Flags().String("subdir", "", "override subdirectory within source")
+	cmd.Flags().String("tag", "", "git tag, branch, or commit hash")
+	cmd.Flags().String("type", "", "override script type (python, shell, node)")
 
 	return cmd
 }
 
-func kitAdd(source, namespace string, manual, force bool, extraPrompt string) error {
+func kitAdd(source, namespace string, opts kitAddOptions) error {
 	kitPath := viper.GetString("kit")
 
 	// 1. Validate namespace exists
@@ -66,13 +104,38 @@ func kitAdd(source, namespace string, manual, force bool, extraPrompt string) er
 		return fmt.Errorf("namespace %q does not exist — run: kael kit init %s", namespace, namespace)
 	}
 
-	// 2. Resolve source to local path
-	localPath, originalSource, entrypoint, err := resolveAddSource(source)
+	// 2. Parse // separator for git monorepo paths
+	gitSource, inRepoPath := parseSourcePath(source)
+
+	// CLI flags take precedence over // path parsing
+	subdir := opts.subdir
+	entrypoint := opts.entrypoint
+	if inRepoPath != "" && subdir == "" && entrypoint == "" {
+		// Check if the in-repo path points to a file or directory
+		dir, file := filepath.Split(inRepoPath)
+		ext := filepath.Ext(file)
+		if ext == ".py" || ext == ".sh" || ext == ".js" || ext == ".ts" {
+			// Path ends in a script — split into subdir + entrypoint
+			subdir = strings.TrimSuffix(dir, "/")
+			entrypoint = file
+		} else {
+			// Treat the whole path as a subdir
+			subdir = inRepoPath
+		}
+	}
+
+	// 3. Resolve source to local path
+	localPath, originalSource, discoveredEntrypoint, err := resolveAddSource(gitSource, subdir, opts.tag)
 	if err != nil {
 		return fmt.Errorf("resolve source: %w", err)
 	}
 
-	// 3. Find the entrypoint script (if not already known from source)
+	// Entrypoint priority: CLI flag > // path > discovered
+	if entrypoint == "" {
+		entrypoint = discoveredEntrypoint
+	}
+
+	// 4. Find the entrypoint script (if not already known)
 	if entrypoint == "" {
 		entrypoint, err = findEntrypoint(localPath)
 		if err != nil {
@@ -82,12 +145,12 @@ func kitAdd(source, namespace string, manual, force bool, extraPrompt string) er
 
 	scriptPath := filepath.Join(localPath, entrypoint)
 
-	// 4. Get tool analysis (AI or manual)
+	// 5. Get tool analysis (AI or manual)
 	var analysis toolAnalysis
-	if manual {
+	if opts.manual {
 		analysis = skeletonAnalysis(entrypoint)
 	} else {
-		a, err := aiAnalysis(scriptPath, extraPrompt)
+		a, err := aiAnalysis(scriptPath, opts.extraPrompt)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "AI analysis failed: %v\nfalling back to skeleton\n", err)
 			analysis = skeletonAnalysis(entrypoint)
@@ -101,13 +164,30 @@ func kitAdd(source, namespace string, manual, force bool, extraPrompt string) er
 		entrypoint = analysis.Entrypoint
 	}
 
-	// 5. Generate Lua definition
+	// 6. Apply CLI overrides post-analysis
+	if opts.executor != "" {
+		analysis.Executor = opts.executor
+	}
+	if opts.toolType != "" {
+		analysis.Type = opts.toolType
+	}
+	if entrypoint != "" {
+		analysis.Entrypoint = entrypoint
+	}
+	if subdir != "" {
+		analysis.SubDir = subdir
+	}
+	if opts.tag != "" {
+		analysis.Tag = opts.tag
+	}
+
+	// 7. Generate Lua definition
 	toolName := strings.TrimSuffix(entrypoint, filepath.Ext(entrypoint))
 	luaContent := generateLua(originalSource, analysis)
 
-	// 6. Write Lua file
+	// 8. Write Lua file
 	luaPath := filepath.Join(nsDir, toolName+".lua")
-	if _, err := os.Stat(luaPath); err == nil && !force {
+	if _, err := os.Stat(luaPath); err == nil && !opts.force {
 		return fmt.Errorf("tool %q already exists at %s (use --force to overwrite)", toolName, luaPath)
 	}
 	if err := os.WriteFile(luaPath, []byte(luaContent), 0644); err != nil {
@@ -115,14 +195,14 @@ func kitAdd(source, namespace string, manual, force bool, extraPrompt string) er
 	}
 	fmt.Printf("wrote %s\n", luaPath)
 
-	// 7. Wire into namespace init.lua
+	// 9. Wire into namespace init.lua
 	requirePath := namespace + "." + toolName
 	if err := wireNamespace(nsInit, toolName, requirePath); err != nil {
 		return fmt.Errorf("wire namespace: %w", err)
 	}
 	fmt.Printf("wired %s into %s\n", toolName, nsInit)
 
-	// 8. Validate
+	// 10. Validate
 	if err := kitValidate(kitPath); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: kit validation failed: %v\n", err)
 		fmt.Fprintf(os.Stderr, "you may need to edit %s\n", luaPath)
@@ -131,13 +211,39 @@ func kitAdd(source, namespace string, manual, force bool, extraPrompt string) er
 	return nil
 }
 
+// parseSourcePath splits a source on "//" to separate the base source from
+// an in-repo path (Terraform-style). For example:
+//
+//	git@github.com:org/repo.git//scripts/check.py → (git@..., scripts/check.py)
+//	/local/path → (/local/path, "")
+func parseSourcePath(source string) (base, inRepoPath string) {
+	idx := strings.Index(source, "//")
+	if idx < 0 {
+		return source, ""
+	}
+	// For git URLs, "//" can appear in https:// — skip the protocol
+	protocolEnd := 0
+	if strings.HasPrefix(source, "https://") {
+		protocolEnd = len("https://")
+	} else if strings.HasPrefix(source, "http://") {
+		protocolEnd = len("http://")
+	}
+
+	idx = strings.Index(source[protocolEnd:], "//")
+	if idx < 0 {
+		return source, ""
+	}
+	idx += protocolEnd
+	return source[:idx], strings.TrimPrefix(source[idx+2:], "/")
+}
+
 // resolveAddSource resolves a source to (localPath, originalSource, entrypoint).
 // For git URLs, it clones/caches and returns the cache path + git URL.
 // For local paths, it returns the absolute path for both.
 // If source is a file (not a directory), entrypoint is set to the filename.
-func resolveAddSource(source string) (string, string, string, error) {
+func resolveAddSource(source, subdir, tag string) (string, string, string, error) {
 	if runtime.IsGitURL(source) {
-		localPath, err := runtime.ResolveSource(source, "", "", false)
+		localPath, err := runtime.ResolveSource(source, tag, subdir, false)
 		if err != nil {
 			return "", "", "", err
 		}
@@ -148,6 +254,10 @@ func resolveAddSource(source string) (string, string, string, error) {
 	absPath, err := filepath.Abs(source)
 	if err != nil {
 		return "", "", "", err
+	}
+
+	if subdir != "" {
+		absPath = filepath.Join(absPath, subdir)
 	}
 
 	info, err := os.Stat(absPath)
@@ -211,9 +321,6 @@ func skeletonAnalysis(entrypoint string) toolAnalysis {
 		Type:       t,
 		Entrypoint: entrypoint,
 		Executor:   "native",
-		Schema: &toolAnalysisSchema{
-			Input: map[string]interface{}{"param": "string"},
-		},
 	}
 }
 
@@ -239,6 +346,7 @@ func aiAnalysis(scriptPath string, extraPrompt string) (toolAnalysis, error) {
 	args = append(args, parts[1:]...)
 	args = append(args, prompt)
 	cmd := exec.Command(parts[0], args...)
+	cmd.Dir = filepath.Dir(scriptPath)
 	cmd.Stderr = os.Stderr
 
 	out, err := cmd.Output()
@@ -327,6 +435,13 @@ func generateLua(source string, a toolAnalysis) string {
 	}
 	b.WriteString(fmt.Sprintf("    executor = %q,\n", executor))
 
+	if a.SubDir != "" {
+		b.WriteString(fmt.Sprintf("    subdir = %q,\n", a.SubDir))
+	}
+	if a.Tag != "" {
+		b.WriteString(fmt.Sprintf("    tag = %q,\n", a.Tag))
+	}
+
 	if len(a.Deps) > 0 {
 		quoted := make([]string, len(a.Deps))
 		for i, d := range a.Deps {
@@ -370,3 +485,4 @@ func generateLua(source string, a toolAnalysis) string {
 	b.WriteString("})\n")
 	return b.String()
 }
+
