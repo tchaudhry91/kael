@@ -43,6 +43,7 @@ func init() {
 	rootCmd.AddCommand(newExecCmd())
 	rootCmd.AddCommand(newKitCmd())
 	rootCmd.AddCommand(newSetupCmd())
+	rootCmd.AddCommand(newReplCmd())
 }
 
 func initConfig() {

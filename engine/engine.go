@@ -64,6 +64,17 @@ func (e *Engine) RunString(ctx context.Context, code string) error {
 	return e.lstate.DoString(code)
 }
 
+// CheckSyntax attempts to compile the code without executing it.
+// Returns nil if valid, an error otherwise. Use isIncomplete() to check
+// if the error indicates an unterminated statement.
+func (e *Engine) CheckSyntax(code string) error {
+	top := e.lstate.GetTop()
+	_, err := e.lstate.LoadString(code)
+	// Restore stack to previous state regardless of outcome
+	e.lstate.SetTop(top)
+	return err
+}
+
 func (e *Engine) RegisterTools() {
 	tools := e.lstate.NewTable()
 	e.lstate.SetField(tools, "define_tool", e.lstate.NewFunction(e.defineTool))
