@@ -75,6 +75,15 @@ func (e *Engine) CheckSyntax(code string) error {
 	return err
 }
 
+// SetArgs exposes script arguments as a global "arg" table in Lua.
+func (e *Engine) SetArgs(args []string) {
+	tbl := e.lstate.NewTable()
+	for i, a := range args {
+		e.lstate.SetTable(tbl, lua.LNumber(i+1), lua.LString(a))
+	}
+	e.lstate.SetGlobal("arg", tbl)
+}
+
 func (e *Engine) RegisterTools() {
 	tools := e.lstate.NewTable()
 	e.lstate.SetField(tools, "define_tool", e.lstate.NewFunction(e.defineTool))

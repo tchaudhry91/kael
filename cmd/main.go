@@ -23,7 +23,7 @@ var rootCmd = &cobra.Command{
 			if err := bootstrap(); err != nil {
 				return fmt.Errorf("bootstrap: %w", err)
 			}
-			return runScript(cmd.Context(), viper.GetString("kit"), viper.GetBool("refresh"), args[0])
+			return runScript(cmd.Context(), viper.GetString("kit"), viper.GetBool("refresh"), args[0], args[1:])
 		}
 		return cmd.Help()
 	},
@@ -62,6 +62,14 @@ func initConfig() {
 }
 
 func main() {
+	// Shebang support: when invoked as "kael script.lua --flag value",
+	// insert "--" after the .lua path so cobra doesn't parse script args as its own flags.
+	if len(os.Args) > 2 && strings.HasSuffix(os.Args[1], ".lua") {
+		patched := []string{os.Args[0], os.Args[1], "--"}
+		patched = append(patched, os.Args[2:]...)
+		os.Args = patched
+	}
+
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
