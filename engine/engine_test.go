@@ -918,6 +918,103 @@ func TestInputAdapterPositionalArgsWithExtraFlags(t *testing.T) {
 	}
 }
 
+func TestInputAdapterMixed(t *testing.T) {
+	mock := &mockRunner{output: []byte(`{}`)}
+	e := newTestEngine(t, mock, map[string]string{
+		"init.lua": `
+			local M = {}
+			M.test = require("test")
+			return M
+		`,
+		"test.lua": `
+			return tools.define_tool({
+				source = "git@github.com:someone/repo.git",
+				input_adapter = "mixed",
+				stdin_fields = {"data"},
+			})
+		`,
+	})
+	defer e.Close()
+
+	err := e.RunString(context.Background(), `kit.test({ data = {1, 2, 3}, name = "world" })`)
+	if err != nil {
+		t.Fatalf("tool call failed: %v", err)
+	}
+
+	// stdin should contain JSON with the "data" field
+	if len(mock.lastInput) == 0 {
+		t.Fatal("expected stdin to contain JSON for mixed adapter")
+	}
+	var stdinParsed map[string]any
+	if err := json.Unmarshal(mock.lastInput, &stdinParsed); err != nil {
+		t.Fatalf("stdin is not valid JSON: %v", err)
+	}
+	if _, ok := stdinParsed["data"]; !ok {
+		t.Errorf("expected 'data' in stdin JSON, got %v", stdinParsed)
+	}
+	// "name" should NOT be in stdin
+	if _, ok := stdinParsed["name"]; ok {
+		t.Errorf("'name' should not be in stdin JSON, got %v", stdinParsed)
+	}
+
+	// ExtraArgs should contain --name world
+	args := mock.lastOpts.ExtraArgs
+	if !containsFlag(args, "--name", "world") {
+		t.Errorf("expected --name world in args, got %v", args)
+	}
+	// ExtraArgs should NOT contain --data
+	for _, a := range args {
+		if a == "--data" {
+			t.Errorf("--data should not appear in args, got %v", args)
+		}
+	}
+}
+
+func TestInputAdapterMixedMultipleStdinFields(t *testing.T) {
+	mock := &mockRunner{output: []byte(`{}`)}
+	e := newTestEngine(t, mock, map[string]string{
+		"init.lua": `
+			local M = {}
+			M.test = require("test")
+			return M
+		`,
+		"test.lua": `
+			return tools.define_tool({
+				source = "git@github.com:someone/repo.git",
+				input_adapter = "mixed",
+				stdin_fields = {"timeseries", "metadata"},
+			})
+		`,
+	})
+	defer e.Close()
+
+	err := e.RunString(context.Background(), `kit.test({ timeseries = {1, 2}, metadata = {key = "val"}, prominence = 0.15 })`)
+	if err != nil {
+		t.Fatalf("tool call failed: %v", err)
+	}
+
+	// stdin should contain both timeseries and metadata
+	var stdinParsed map[string]any
+	if err := json.Unmarshal(mock.lastInput, &stdinParsed); err != nil {
+		t.Fatalf("stdin is not valid JSON: %v", err)
+	}
+	if _, ok := stdinParsed["timeseries"]; !ok {
+		t.Errorf("expected 'timeseries' in stdin JSON, got %v", stdinParsed)
+	}
+	if _, ok := stdinParsed["metadata"]; !ok {
+		t.Errorf("expected 'metadata' in stdin JSON, got %v", stdinParsed)
+	}
+	if _, ok := stdinParsed["prominence"]; ok {
+		t.Errorf("'prominence' should not be in stdin JSON, got %v", stdinParsed)
+	}
+
+	// ExtraArgs should contain --prominence 0.15
+	args := mock.lastOpts.ExtraArgs
+	if !containsFlag(args, "--prominence", "0.15") {
+		t.Errorf("expected --prominence 0.15 in args, got %v", args)
+	}
+}
+
 // containsFlag checks if args contains --key followed by value.
 func containsFlag(args []string, key, value string) bool {
 	for i := 0; i < len(args)-1; i++ {

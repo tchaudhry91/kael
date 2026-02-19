@@ -23,6 +23,7 @@ type toolAnalysis struct {
 	InputAdapter  string                       `json:"input_adapter,omitempty"`
 	OutputAdapter string                       `json:"output_adapter,omitempty"`
 	ArgsOrder     []string                     `json:"args_order,omitempty"`
+	StdinFields   []string                     `json:"stdin_fields,omitempty"`
 	Schema        *toolAnalysisSchema          `json:"schema,omitempty"`
 	Deps          []string                     `json:"deps,omitempty"`
 	Env           []string                     `json:"env,omitempty"`
@@ -466,6 +467,13 @@ func generateLua(source string, a toolAnalysis) string {
 			quoted[i] = fmt.Sprintf("%q", f)
 		}
 		b.WriteString(fmt.Sprintf("    args_order = {%s},\n", strings.Join(quoted, ", ")))
+	}
+	if len(a.StdinFields) > 0 {
+		quoted := make([]string, len(a.StdinFields))
+		for i, f := range a.StdinFields {
+			quoted[i] = fmt.Sprintf("%q", f)
+		}
+		b.WriteString(fmt.Sprintf("    stdin_fields = {%s},\n", strings.Join(quoted, ", ")))
 	}
 	if a.OutputAdapter != "" && a.OutputAdapter != "text" {
 		b.WriteString(fmt.Sprintf("    output_adapter = %q,\n", a.OutputAdapter))

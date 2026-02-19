@@ -13,6 +13,7 @@ const (
 	InputAdapterJSON           = "json"            // default: serialize to JSON on stdin
 	InputAdapterArgs           = "args"            // convert table to --key value CLI flags
 	InputAdapterPositionalArgs = "positional_args" // emit values as positional args in args_order
+	InputAdapterMixed          = "mixed"           // stdin_fields as JSON on stdin, rest as CLI flags
 )
 
 // Output adapter types
@@ -24,7 +25,7 @@ const (
 
 // adaptInput converts a merged Lua table into stdin bytes and optional extra args,
 // based on the input adapter type.
-func adaptInput(inputAdapter string, merged *lua.LTable, argsOrder []string) (stdinBytes []byte, extraArgs []string, err error) {
+func adaptInput(inputAdapter string, merged *lua.LTable, argsOrder []string, stdinFields []string) (stdinBytes []byte, extraArgs []string, err error) {
 	switch inputAdapter {
 	case InputAdapterJSON:
 		input := luaToGo(merged)
@@ -35,6 +36,8 @@ func adaptInput(inputAdapter string, merged *lua.LTable, argsOrder []string) (st
 		return data, nil, nil
 	case InputAdapterPositionalArgs:
 		return positionalFromTable(merged, argsOrder)
+	case InputAdapterMixed:
+		return mixedFromTable(merged, stdinFields)
 	case InputAdapterArgs, "":
 		return argsFromTable(merged)
 	default:
@@ -118,6 +121,54 @@ func positionalFromTable(tbl *lua.LTable, argsOrder []string) (stdinBytes []byte
 	})
 
 	return nil, args, nil
+}
+
+// mixedFromTable splits a Lua table: fields listed in stdinFields are serialized as JSON
+// on stdin, all remaining fields become --key value CLI flags.
+func mixedFromTable(tbl *lua.LTable, stdinFields []string) (stdinBytes []byte, extraArgs []string, err error) {
+	stdinSet := make(map[string]bool, len(stdinFields))
+	for _, f := range stdinFields {
+		stdinSet[f] = true
+	}
+
+	// Build stdin JSON from designated fields
+	stdinMap := make(map[string]any, len(stdinFields))
+	for _, f := range stdinFields {
+		val := tbl.RawGetString(f)
+		if val != lua.LNil {
+			stdinMap[f] = luaToGo(val)
+		}
+	}
+	data, err := json.Marshal(stdinMap)
+	if err != nil {
+		return nil, nil, fmt.Errorf("data marshal failure: %s", err.Error())
+	}
+
+	// Build CLI args from remaining fields
+	var args []string
+	tbl.ForEach(func(key, val lua.LValue) {
+		name := key.String()
+		if stdinSet[name] {
+			return
+		}
+		flag := "--" + name
+		switch v := val.(type) {
+		case lua.LBool:
+			if bool(v) {
+				args = append(args, flag)
+			}
+		case lua.LNumber:
+			args = append(args, flag, fmt.Sprintf("%g", float64(v)))
+		case lua.LString:
+			args = append(args, flag, string(v))
+		case *lua.LTable:
+			v.ForEach(func(_, item lua.LValue) {
+				args = append(args, flag, item.String())
+			})
+		}
+	})
+
+	return data, args, nil
 }
 
 // adaptOutput converts raw runner output bytes into a Go value suitable for goToLua,

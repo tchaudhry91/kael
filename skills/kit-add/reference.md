@@ -36,9 +36,10 @@ return tools.define_tool({
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `input_adapter` | string | `"args"` | How input is passed to the script. `"args"`: as CLI flags (`--key value`). `"json"`: as JSON on stdin. `"positional_args"`: as positional arguments in `args_order`. |
+| `input_adapter` | string | `"args"` | How input is passed to the script. `"args"`: as CLI flags (`--key value`). `"json"`: as JSON on stdin. `"positional_args"`: as positional arguments in `args_order`. `"mixed"`: fields in `stdin_fields` as JSON on stdin, rest as CLI flags. |
 | `output_adapter` | string | `"text"` | How output is interpreted. `"text"`: raw stdout wrapped as `{output: "..."}`. `"json"`: stdout parsed as JSON. `"lines"`: stdout split by newlines as `{lines: [...]}`. |
 | `args_order` | array of strings | — | Required when `input_adapter` is `"positional_args"`. Specifies the order in which input fields are passed as positional arguments. |
+| `stdin_fields` | array of strings | — | Required when `input_adapter` is `"mixed"`. Lists the field names sent as JSON on stdin. All other fields become CLI flags. |
 
 ### Input adapter details
 
@@ -73,6 +74,31 @@ Calling `kit.lookup({ tenant_name = "acme", region = "us-east-1" })` runs:
 ```
 lookup.sh acme us-east-1
 ```
+
+**`mixed`**: Fields listed in `stdin_fields` are serialized as a JSON object on stdin. All other fields are converted to `--key value` CLI flags (same rules as `args`). Use this when a script reads bulk/complex data from stdin and simple config from CLI flags.
+
+Example:
+```lua
+return tools.define_tool({
+    source = "/path/to/scripts",
+    entrypoint = "detect_peaks.py",
+    type = "python",
+    input_adapter = "mixed",
+    stdin_fields = {"timeseries"},
+    output_adapter = "json",
+    schema = {
+        input = {
+            timeseries = "object[]",
+            prominence = "number?",
+            zscore = "number?",
+        },
+    },
+})
+```
+
+Calling `kit.detect_peaks({ timeseries = data, prominence = 0.15 })`:
+- stdin receives: `{"timeseries": [...]}`
+- CLI args: `--prominence 0.15`
 
 ### Output adapter details
 

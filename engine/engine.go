@@ -18,9 +18,10 @@ type ToolConfig struct {
 	Tag        string // git tag, branch, or commit hash
 	Type       string // python, node, shell, other
 	Schema        *ToolSchema
-	InputAdapter  string   // "json" (default), "args", or "positional_args"
+	InputAdapter  string   // "json", "args", "positional_args", or "mixed"
 	OutputAdapter string   // "json" (default), "text", or "lines"
 	ArgsOrder     []string // ordered field names for positional_args adapter
+	StdinFields   []string // fields sent via stdin JSON for mixed adapter
 	Defaults     map[string]lua.LValue
 	Deps         []string
 	Env          []string
@@ -212,6 +213,13 @@ func (e *Engine) defineTool(L *lua.LState) int {
 			})
 		}
 	}
+	if sf := L.GetField(configTbl, "stdin_fields"); sf != lua.LNil {
+		if sfTbl, ok := sf.(*lua.LTable); ok {
+			sfTbl.ForEach(func(_, val lua.LValue) {
+				cfg.StdinFields = append(cfg.StdinFields, val.String())
+			})
+		}
+	}
 
 	cfg.Schema = parseSchema(L, configTbl)
 
@@ -248,7 +256,7 @@ func (e *Engine) defineTool(L *lua.LState) int {
 			Timeout:    cfg.Timeout,
 		}
 
-		inputB, extraArgs, err := adaptInput(cfg.InputAdapter, merged, cfg.ArgsOrder)
+		inputB, extraArgs, err := adaptInput(cfg.InputAdapter, merged, cfg.ArgsOrder, cfg.StdinFields)
 		if err != nil {
 			L.RaiseError("%s", err.Error())
 			return 0
